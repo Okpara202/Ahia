@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -94,10 +95,38 @@ export function ProductForm({ initial, mode }: ProductFormProps) {
       router.refresh();
     } catch (err) {
       const apiErr = extractApiError(err);
-      // Log to console.warn (not error) so Next.js's dev overlay doesn't
-      // surface this as a crash — it's a caught, handled API error and the
-      // user sees a toast. The console line is purely for debugging.
-      console.warn("[product-publish] failed", { error: err, apiErr });
+      // Dump everything we can about the failed request so a 500 from backend
+      // is debuggable from the browser console alone (no need for Render logs).
+      const debug: Record<string, unknown> = { apiErr };
+      if (axios.isAxiosError(err)) {
+        debug.status = err.response?.status;
+        debug.statusText = err.response?.statusText;
+        debug.responseBody = err.response?.data;
+        debug.requestUrl = err.config?.url;
+        debug.requestMethod = err.config?.method;
+        // Stringify the FormData so we can see what was actually shipped.
+        const fdSummary: Record<string, string | string[]> = {};
+        for (const [k, v] of (
+          err.config?.data instanceof FormData
+            ? err.config.data
+            : new FormData()
+        ).entries()) {
+          const display =
+            v instanceof File
+              ? `<File name="${v.name}" size=${v.size} type="${v.type}">`
+              : String(v);
+          const existing = fdSummary[k];
+          if (existing === undefined) {
+            fdSummary[k] = display;
+          } else if (Array.isArray(existing)) {
+            existing.push(display);
+          } else {
+            fdSummary[k] = [existing, display];
+          }
+        }
+        debug.requestPayload = fdSummary;
+      }
+      console.warn("[product-publish] failed", debug);
       if (apiErr?.fields) {
         setFieldErrors(apiErr.fields);
       } else {
@@ -142,10 +171,10 @@ export function ProductForm({ initial, mode }: ProductFormProps) {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none scheme-light focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 dark:scheme-dark"
           >
             {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
+              <option key={c} value={c} className="bg-background text-foreground">
                 {c}
               </option>
             ))}

@@ -112,6 +112,9 @@ function mapInvoiceLine(raw: unknown): InvoiceLine {
     status,
     position: asNumber(r.position, 0),
     resolvedAt: asNullableString(r.resolvedAt),
+    autoReleaseAt: asNullableString(r.autoReleaseAt),
+    extendedAt: asNullableString(r.extendedAt),
+    extensionReason: asNullableString(r.extensionReason),
   };
 }
 
@@ -372,6 +375,157 @@ export async function markConversationRead(
     { throughMessageId }
   );
   return data;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Invoices                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Discriminated union — what the seller composer sends per line.
+ *
+ * For `product` lines, the backend snapshots the product's current `name`
+ * and `unitPrice` at send time, so we only forward `productId` + `quantity`.
+ * For `custom` and `discount` lines, we must supply `name` and `unitPrice`
+ * (discount = negative).
+ */
+export type InvoiceLineDraft =
+  | { kind: "product"; productId: string; quantity: number }
+  | {
+      kind: "custom";
+      name: string;
+      unitPrice: number;
+      quantity: number;
+    }
+  | {
+      kind: "discount";
+      name: string;
+      /** Negative integer/decimal — discount is subtracted from the total. */
+      unitPrice: number;
+      quantity?: number;
+    };
+
+/**
+ * Send an invoice as a chat message. Seller-only. Backend creates the
+ * invoice row, the lines, and the message envelope in one transaction and
+ * emits both `message:new` and `invoice:created` to the buyer.
+ *
+ * Canonical URL is `POST /conversations/:id/invoices` (confirmed by backend
+ * 2026-05-30; the older `/messages/invoice` URL still works as an alias).
+ */
+export async function sendInvoiceMessage(
+  conversationId: string,
+  lines: InvoiceLineDraft[]
+): Promise<Message> {
+  const { data } = await apiClient().post<{ message: unknown }>(
+    `/conversations/${conversationId}/invoices`,
+    { lines }
+  );
+  return mapMessage(data.message);
+}
+
+/** Seller cancels an unpaid invoice. Returns the updated invoice. */
+export async function cancelInvoice(invoiceId: string): Promise<Invoice> {
+  const { data } = await apiClient().post<{ invoice: unknown }>(
+    `/invoices/${invoiceId}/cancel`
+  );
+  return mapInvoice(data.invoice);
+}
+
+/** Buyer pays an invoice. Returns Paystack init payload — we redirect to
+ *  `authorizationUrl`. Payment confirmation happens via Paystack webhook +
+ *  `invoice:paid` socket event. */
+export async function payInvoice(
+  invoiceId: string,
+  callbackUrl?: string
+): Promise<{ authorizationUrl: string; reference: string }> {
+  const { data } = await apiClient().post<{
+    authorizationUrl: string;
+    reference: string;
+  }>(
+    `/invoices/${invoiceId}/pay`,
+    callbackUrl ? { callbackUrl } : {}
+  );
+  return data;
+}
+
+/**
+ * Buyer confirms delivery (releases escrow) for a single line. Backend
+ * returns the line with the updated invoice nested inside it, so we can
+ * refresh local state from a single response.
+ *
+ * "Confirm" is the buyer-facing verb; "release" is the money-side effect.
+ * Backend accepts both `/invoice-lines/:id/confirm` (canonical) and
+ * `.../release` (alias) — using `confirm` to match the UX label.
+ */
+export async function confirmInvoiceLine(
+  lineId: string
+): Promise<{ line: InvoiceLine; invoice: Invoice }> {
+  const { data } = await apiClient().post<{ line: unknown }>(
+    `/invoice-lines/${lineId}/confirm`
+  );
+  const lineRaw = asObject(data.line);
+  return {
+    line: mapInvoiceLine(lineRaw),
+    invoice: mapInvoice(lineRaw.invoice),
+  };
+}
+
+/**
+ * Buyer disputes a single line. Multipart so optional evidence rides along.
+ * Evidence should already be compressed by the caller via
+ * `compressImageIfNeeded`.
+ *
+ * Important: backend does NOT change the invoice status when a single line
+ * is disputed — only that line's `autoReleaseAt` is cleared. Other lines on
+ * the invoice keep their auto-release timers and can still be confirmed
+ * independently. Frontend detects a "disputed" line via
+ * `status === 'pending' && autoReleaseAt === null`.
+ */
+export async function disputeInvoiceLine(
+  lineId: string,
+  args: { reason: string; evidence?: File }
+): Promise<{ line: InvoiceLine; dispute: { id: string; reason: string } }> {
+  let body: FormData | Record<string, string>;
+  if (args.evidence) {
+    const fd = new FormData();
+    fd.append("reason", args.reason);
+    fd.append("evidence_file", args.evidence);
+    body = fd;
+  } else {
+    body = { reason: args.reason };
+  }
+  const { data } = await apiClient().post<{
+    line: unknown;
+    dispute: unknown;
+  }>(`/invoice-lines/${lineId}/dispute`, body);
+  const dispute = asObject(data.dispute);
+  return {
+    line: mapInvoiceLine(data.line),
+    dispute: {
+      id: asString(dispute.id),
+      reason: asString(dispute.reason),
+    },
+  };
+}
+
+/**
+ * Buyer extends their review window on a single line by +7 days. One
+ * extension max per line — backend rejects subsequent attempts with
+ * `already_extended`. Reason is required (3–200 chars after trim) and
+ * surfaces on the seller's line badge.
+ *
+ * See FRONTEND_ASK_extend.md for the full spec and rationale.
+ */
+export async function extendInvoiceLine(
+  lineId: string,
+  reason: string
+): Promise<InvoiceLine> {
+  const { data } = await apiClient().post<{ line: unknown }>(
+    `/invoice-lines/${lineId}/extend`,
+    { reason }
+  );
+  return mapInvoiceLine(data.line);
 }
 
 export interface MessageSearchMatch {

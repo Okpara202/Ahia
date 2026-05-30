@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
       // backend and we render the returned URLs via next/image. Allowlist
       // any cloud-name subpath under res.cloudinary.com.
       { protocol: "https", hostname: "res.cloudinary.com" },
+      // Google OAuth users get their Google profile picture as avatarUrl.
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
 };

@@ -74,16 +74,29 @@ export const useChatStore = create<ChatState>((set) => ({
   addMessage: (message) =>
     set((state) => {
       const prev = state.messagesByConversation[message.conversationId] ?? [];
+      // Idempotent on id: backend echoes `message:new` to the sender too, so
+      // after an optimistic send + REST replace, the socket echo would append
+      // a duplicate without this check. If we already have this id, replace
+      // it in place; otherwise append. Also handles the case where multiple
+      // events (`message:new` + `image:new` / `invoice:created`) target the
+      // same message.
+      const existingIndex = prev.findIndex((m) => m.id === message.id);
+      const nextList =
+        existingIndex >= 0
+          ? prev.map((m, i) => (i === existingIndex ? message : m))
+          : [...prev, message];
       const messagesByConversation = {
         ...state.messagesByConversation,
-        [message.conversationId]: [...prev, message],
+        [message.conversationId]: nextList,
       };
       // Bump the matching inbox row's snippet + lastActivityAt locally so
       // the list updates immediately. Server echoes the same on next list
-      // fetch with a properly rendered snippet.
+      // fetch with a properly rendered snippet. Skip the unread bump when
+      // we already had this id — that's a socket echo of our own send.
       const isOpen = state.openConversationIds.includes(
         message.conversationId
       );
+      const isEcho = existingIndex >= 0;
       const conversations = state.conversations.map((c) => {
         if (c.id !== message.conversationId) return c;
         const counterpartyIsSender = c.counterparty.id === message.senderId;
@@ -98,7 +111,7 @@ export const useChatStore = create<ChatState>((set) => ({
           },
           lastActivityAt: message.createdAt,
           unreadCount:
-            counterpartyIsSender && !isOpen
+            !isEcho && counterpartyIsSender && !isOpen
               ? c.unreadCount + 1
               : c.unreadCount,
         };

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleDollarSign,
+  Clock,
   Gift,
   Megaphone,
   ShieldCheck,
@@ -13,6 +14,10 @@ import type { LucideIcon } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
 import { formatRelativeTime } from "@/lib/format";
+import {
+  notificationBody,
+  notificationTitle,
+} from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import type { Notification, NotificationType } from "@/types";
 
@@ -22,6 +27,7 @@ const ICON_MAP: Record<NotificationType, LucideIcon> = {
   invoice_received_payment: CircleDollarSign,
   invoice_line_released: CheckCircle2,
   invoice_line_disputed: AlertTriangle,
+  invoice_line_extended: Clock,
   dispute_resolved: ShieldCheck,
   boost_purchased: Zap,
   discover_campaign_started: Megaphone,
@@ -35,6 +41,7 @@ const TINT_MAP: Record<NotificationType, string> = {
   invoice_received_payment: "bg-primary/10 text-primary",
   invoice_line_released: "bg-success/15 text-success",
   invoice_line_disputed: "bg-destructive/10 text-destructive",
+  invoice_line_extended: "bg-accent/15 text-accent",
   dispute_resolved: "bg-primary/10 text-primary",
   boost_purchased: "bg-accent/15 text-accent",
   discover_campaign_started: "bg-accent/15 text-accent",
@@ -49,6 +56,8 @@ export function NotificationItem({
 }) {
   const Icon = ICON_MAP[notification.type];
   const tint = TINT_MAP[notification.type];
+  const title = notificationTitle(notification);
+  const body = notificationBody(notification);
 
   const content = (
     <div
@@ -56,7 +65,7 @@ export function NotificationItem({
         "flex items-start gap-4 rounded-2xl border p-4 transition-colors",
         notification.read
           ? "border-border bg-card hover:bg-muted/30"
-          : "border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.06]"
+          : "border-primary/30 bg-primary/3 hover:bg-primary/6"
       )}
     >
       <span
@@ -71,7 +80,7 @@ export function NotificationItem({
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <Typography variant="label-lg" className="truncate">
-            {notification.title}
+            {title}
           </Typography>
           {!notification.read && (
             <span
@@ -80,9 +89,11 @@ export function NotificationItem({
             />
           )}
         </div>
-        <Typography variant="body-sm" className="text-muted-foreground">
-          {notification.body}
-        </Typography>
+        {body && (
+          <Typography variant="body-sm" className="text-muted-foreground">
+            {body}
+          </Typography>
+        )}
         <Typography
           variant="caption"
           className="mt-1 text-muted-foreground"

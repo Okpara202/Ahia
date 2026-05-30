@@ -286,6 +286,17 @@ export interface InvoiceLine {
   position: number;
   /** When status moved to released or refunded. */
   resolvedAt: string | null;
+  /** When status='pending', this is the auto-release timestamp (paidAt + 7d).
+   *  When a dispute is opened on this line, backend CLEARS this to null —
+   *  so `status='pending' && autoReleaseAt === null` is how the UI detects
+   *  a line that's frozen pending admin review. */
+  autoReleaseAt: string | null;
+  /** When the buyer extended their review window (one extension max per
+   *  line). Non-null = the extension was used. */
+  extendedAt: string | null;
+  /** Short reason the buyer gave when extending. Shown on the seller's
+   *  line badge so they understand why their money's held longer. */
+  extensionReason: string | null;
 }
 
 export type InvoiceStatus =
@@ -402,6 +413,7 @@ export type NotificationType =
   | "invoice_received_payment"
   | "invoice_line_released"
   | "invoice_line_disputed"
+  | "invoice_line_extended"
   | "dispute_resolved"
   | "boost_purchased"
   | "discover_campaign_started"

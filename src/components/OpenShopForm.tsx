@@ -1,18 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2, Store } from "lucide-react";
+import {
+  ArrowRight,
+  Camera,
+  Loader2,
+  Store,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/Input";
 import { Textarea } from "@/components/Textarea";
 import { Typography } from "@/components/Typography";
 import { apiClient, extractApiError } from "@/lib/api";
+import { compressImageIfNeeded, formatBytes } from "@/lib/image";
 import { createShop } from "@/lib/services/seller";
 import { useAuthStore } from "@/store/authStore";
 import { useSellerShopStore } from "@/store/sellerShopStore";
 import { toast } from "@/store/toastStore";
+
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 const CATEGORIES = [
   "Fashion",
@@ -55,6 +66,7 @@ interface OpenShopFormProps {
  */
 export function OpenShopForm({ onCreated }: OpenShopFormProps) {
   const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
   const [category, setCategory] = useState("Fashion");
@@ -63,6 +75,64 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
   const [showLegalName, setShowLegalName] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [avatar, setAvatar] = useState<{
+    file: File;
+    previewUrl: string;
+  } | null>(null);
+  const [optimizingAvatar, setOptimizingAvatar] = useState(false);
+
+  // Release any blob URL we hold when the form unmounts.
+  useEffect(() => {
+    return () => {
+      if (avatar) URL.revokeObjectURL(avatar.previewUrl);
+    };
+  }, [avatar]);
+
+  async function handleAvatarPick(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setOptimizingAvatar(true);
+    try {
+      const result = await compressImageIfNeeded(file);
+      if (result.file.size > MAX_FILE_BYTES) {
+        toast.error(
+          "Logo is too large",
+          `Even after optimizing, ${formatBytes(
+            result.file.size
+          )} is over the limit.`
+        );
+        return;
+      }
+      if (avatar) URL.revokeObjectURL(avatar.previewUrl);
+      setAvatar({
+        file: result.file,
+        previewUrl: URL.createObjectURL(result.file),
+      });
+      if (result.compressed) {
+        toast.success(
+          "Optimized for faster upload",
+          `${formatBytes(result.originalBytes)} → ${formatBytes(
+            result.outputBytes
+          )}.`
+        );
+      }
+    } catch (err) {
+      console.warn("[shop-avatar-compress] failed", err);
+      toast.error(
+        "Couldn't read that image",
+        "Try a different file or use JPEG/PNG."
+      );
+    } finally {
+      setOptimizingAvatar(false);
+    }
+  }
+
+  function clearAvatar() {
+    if (avatar) URL.revokeObjectURL(avatar.previewUrl);
+    setAvatar(null);
+  }
 
   const canSubmit = name.trim().length > 0 && handle.trim().length > 0;
 
@@ -90,6 +160,7 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
         location: location === "Other" ? undefined : location,
         bio: bio.trim() || undefined,
         showLegalName,
+        avatarFile: avatar?.file,
       });
       // Seed the store so SellerShellGate immediately renders the full
       // shell on the next route without re-fetching.
@@ -142,6 +213,67 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
       </div>
 
       <div className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-5 sm:p-6">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={optimizingAvatar}
+            aria-label={avatar ? "Replace shop logo" : "Add shop logo"}
+            className="relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {optimizingAvatar ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : avatar ? (
+              <>
+                <Image
+                  src={avatar.previewUrl}
+                  alt="Shop logo preview"
+                  fill
+                  sizes="80px"
+                  className="object-cover"
+                  unoptimized
+                />
+                <span className="absolute inset-0 flex items-end justify-center bg-linear-to-t from-foreground/60 to-transparent pb-1.5 opacity-0 transition-opacity hover:opacity-100">
+                  <Upload className="size-4 text-background" />
+                </span>
+              </>
+            ) : (
+              <Camera className="size-6" />
+            )}
+          </button>
+
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <Typography variant="label-md">
+              {avatar ? "Looking good" : "Add a shop logo"}
+            </Typography>
+            <Typography variant="caption" className="text-muted-foreground">
+              {avatar
+                ? "Buyers will see this next to your shop name."
+                : "Optional, but trusted shops have one. Square works best."}
+            </Typography>
+            {avatar && (
+              <button
+                type="button"
+                onClick={clearAvatar}
+                className="mt-1 inline-flex w-fit items-center gap-1 text-muted-foreground transition-colors hover:text-destructive"
+              >
+                <X className="size-3" />
+                <Typography variant="caption">Remove</Typography>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleAvatarPick}
+        />
+
+        <div className="h-px bg-border" aria-hidden />
+
         <Input
           label="Shop name"
           placeholder="e.g. Chi's Closet"
@@ -175,10 +307,10 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none scheme-light focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 dark:scheme-dark"
           >
             {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
+              <option key={c} value={c} className="bg-background text-foreground">
                 {c}
               </option>
             ))}
@@ -192,10 +324,10 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
           <select
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none scheme-light focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 dark:scheme-dark"
           >
             {LOCATIONS.map((c) => (
-              <option key={c} value={c}>
+              <option key={c} value={c} className="bg-background text-foreground">
                 {c}
               </option>
             ))}

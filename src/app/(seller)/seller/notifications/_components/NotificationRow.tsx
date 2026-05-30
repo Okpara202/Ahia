@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Gift,
   Megaphone,
   ShieldCheck,
@@ -13,6 +14,10 @@ import {
 
 import { Typography } from "@/components/Typography";
 import { formatRelativeTime } from "@/lib/format";
+import {
+  notificationBody,
+  notificationTitle,
+} from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import type { Notification, NotificationType } from "@/types";
 
@@ -26,6 +31,7 @@ const ICON: Record<NotificationType, LucideIcon> = {
   invoice_received_payment: Wallet,
   invoice_line_released: CheckCircle2,
   invoice_line_disputed: AlertTriangle,
+  invoice_line_extended: Clock,
   dispute_resolved: ShieldCheck,
   boost_purchased: Zap,
   discover_campaign_started: Megaphone,
@@ -39,6 +45,7 @@ const ICON_TINT: Record<NotificationType, string> = {
   invoice_received_payment: "bg-primary/10 text-primary",
   invoice_line_released: "bg-success/15 text-success",
   invoice_line_disputed: "bg-destructive/15 text-destructive",
+  invoice_line_extended: "bg-accent/15 text-accent",
   dispute_resolved: "bg-primary/10 text-primary",
   boost_purchased: "bg-accent/15 text-accent",
   discover_campaign_started: "bg-accent/15 text-accent",
@@ -49,6 +56,8 @@ const ICON_TINT: Record<NotificationType, string> = {
 export function NotificationRow({ notification }: NotificationRowProps) {
   const Icon = ICON[notification.type];
   const tint = ICON_TINT[notification.type];
+  const title = notificationTitle(notification);
+  const body = notificationBody(notification);
 
   const inner = (
     <div
@@ -56,7 +65,7 @@ export function NotificationRow({ notification }: NotificationRowProps) {
         "flex items-start gap-3 rounded-2xl border p-3 transition-colors",
         notification.read
           ? "border-border bg-card hover:bg-muted/40"
-          : "border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.06]"
+          : "border-primary/30 bg-primary/3 hover:bg-primary/6"
       )}
     >
       <span
@@ -71,7 +80,7 @@ export function NotificationRow({ notification }: NotificationRowProps) {
             variant="label-md"
             className={cn(!notification.read && "font-semibold")}
           >
-            {notification.title}
+            {title}
           </Typography>
           <Typography
             variant="caption"
@@ -80,9 +89,11 @@ export function NotificationRow({ notification }: NotificationRowProps) {
             {formatRelativeTime(notification.createdAt)}
           </Typography>
         </div>
-        <Typography variant="body-sm" className="text-muted-foreground">
-          {notification.body}
-        </Typography>
+        {body && (
+          <Typography variant="body-sm" className="text-muted-foreground">
+            {body}
+          </Typography>
+        )}
       </div>
       {!notification.read && (
         <span
@@ -96,5 +107,7 @@ export function NotificationRow({ notification }: NotificationRowProps) {
   if (notification.link) {
     return <Link href={notification.link}>{inner}</Link>;
   }
-  return <li>{inner}</li>;
+  // Outer <li> is provided by the list (NotificationsListClient). Returning
+  // <li> here would nest <li> inside <li> — invalid HTML, hydration error.
+  return inner;
 }

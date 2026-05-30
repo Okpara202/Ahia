@@ -65,17 +65,38 @@ export interface CreateShopArgs {
   location?: string;
   bio?: string;
   showLegalName?: boolean;
+  /** Optional shop logo. When present we switch to multipart and the file
+   *  rides under `avatar_file` (per backend's 2026-05-30 confirmation).
+   *  Callers MUST compress with `compressImageIfNeeded` first — backend
+   *  caps at 5 MB. */
+  avatarFile?: File;
 }
 
 export async function createShop(args: CreateShopArgs): Promise<Shop> {
-  const { data } = await apiClient().post<{ shop: unknown }>("/shops", {
-    name: args.name,
-    handle: args.handle,
-    category: args.category,
-    location: args.location,
-    bio: args.bio,
-    showLegalName: args.showLegalName ?? false,
-  });
+  // When there's no image, stay on JSON — same shape backend has always
+  // supported. When an avatar is included, switch to multipart so the file
+  // streams alongside the form fields in one request.
+  if (!args.avatarFile) {
+    const { data } = await apiClient().post<{ shop: unknown }>("/shops", {
+      name: args.name,
+      handle: args.handle,
+      category: args.category,
+      location: args.location,
+      bio: args.bio,
+      showLegalName: args.showLegalName ?? false,
+    });
+    return mapShop(data.shop);
+  }
+
+  const fd = new FormData();
+  fd.append("name", args.name);
+  fd.append("handle", args.handle);
+  fd.append("category", args.category);
+  if (args.location) fd.append("location", args.location);
+  if (args.bio) fd.append("bio", args.bio);
+  fd.append("showLegalName", String(args.showLegalName ?? false));
+  fd.append("avatar_file", args.avatarFile);
+  const { data } = await apiClient().post<{ shop: unknown }>("/shops", fd);
   return mapShop(data.shop);
 }
 

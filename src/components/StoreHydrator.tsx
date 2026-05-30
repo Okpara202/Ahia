@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { useSocket } from "@/hooks/useSocket";
 import { apiClient, isUnauthorized } from "@/lib/api";
@@ -32,8 +32,16 @@ interface StoreHydratorProps {
 }
 
 /**
- * Seeds zustand stores with server-fetched data on first render.
+ * Seeds zustand stores from server-fetched data on first mount.
  * Renders nothing. Place near the top of each layout, before any consumer.
+ *
+ * Hydration runs in a useEffect (not in render) because writing to a zustand
+ * store synchronously re-renders subscribed siblings — that violates React 19's
+ * "no setState across components during render" rule (BuyerTopNav reads
+ * unreadCount from chatStore, so setting conversations during this component's
+ * render schedules a BuyerTopNav re-render mid-render of a different component).
+ * The brief flash of empty stores before this effect lands is invisible in
+ * practice — AuthGate covers the auth case with its own loader.
  */
 export function StoreHydrator({
   user,
@@ -41,7 +49,12 @@ export function StoreHydrator({
   conversations,
   notifications,
 }: StoreHydratorProps) {
-  useState(() => {
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+
     if (user) {
       useAuthStore.setState({
         user,
@@ -49,7 +62,7 @@ export function StoreHydrator({
         authReady: true,
         activeRole,
       });
-      // First render after sign-in: push any locally-persisted wishlist to
+      // First mount after sign-in: push any locally-persisted wishlist to
       // the server, then re-seed the store with the unioned server set.
       // Fire-and-forget; never block the page on this.
       const localIds = useWishlistStore.getState().ids;
@@ -65,8 +78,7 @@ export function StoreHydrator({
     //  - session genuinely expired → the client recovery below catches it
     useChatStore.getState().setConversations(conversations);
     useNotificationStore.getState().setItems(notifications);
-    return null;
-  });
+  }, [user, activeRole, conversations, notifications]);
 
   const storeUser = useAuthStore((s) => s.user);
 

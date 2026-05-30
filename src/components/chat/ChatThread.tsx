@@ -5,8 +5,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { extractApiError } from "@/lib/api";
 import {
+  markConversationRead as serverMarkConversationRead,
   sendImageMessage,
   sendTextMessage,
+  sendVoiceMessage,
 } from "@/lib/services/conversations";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
@@ -93,6 +95,32 @@ export function ChatThread({
 
   const messages = messagesInStore ?? initialMessages;
 
+  // Tell the server the user has read up through the latest incoming message
+  // in this thread. Without this, GET /conversations keeps returning a stale
+  // unread count and the inbox badge inflates on refresh. Fires on open AND
+  // whenever a new counterpart message lands while the thread is in view.
+  // The lastReadServerRef de-dupes so we don't pound the endpoint on every
+  // re-render.
+  const lastReadServerRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentUserId) return;
+    const lastIncoming = [...messages]
+      .reverse()
+      .find(
+        (m) => m.senderId !== currentUserId && !m.id.startsWith("m_local_")
+      );
+    if (!lastIncoming) return;
+    if (lastReadServerRef.current === lastIncoming.id) return;
+    lastReadServerRef.current = lastIncoming.id;
+    void serverMarkConversationRead(conversation.id, lastIncoming.id).catch(
+      () => {
+        // Silent — if the read call fails, the local zero-out still keeps the
+        // badge accurate for this session. Worst case is a stale badge on the
+        // next hard refresh.
+      }
+    );
+  }, [conversation.id, currentUserId, messages]);
+
   async function handleSend(text: string) {
     const tempId = `m_local_${Date.now()}`;
     const ctxId = pendingContextProductId;
@@ -147,16 +175,73 @@ export function ChatThread({
     }
   }
 
+  async function handleSendVoice(file: File, durationMs: number) {
+    const tempId = `m_voice_${Date.now()}`;
+    const ctxId = pendingContextProductId;
+    const previewUrl = URL.createObjectURL(file);
+    const optimistic: Message = {
+      ...emptyMessageBase(conversation.id, currentUserId),
+      id: tempId,
+      type: "voice",
+      voiceUrl: previewUrl,
+      voiceDurationMs: durationMs,
+      content: null,
+    };
+    addMessage(optimistic);
+    if (ctxId) clearPendingContext();
+    try {
+      const persisted = await sendVoiceMessage(
+        conversation.id,
+        file,
+        durationMs,
+        { contextProductId: ctxId ?? undefined }
+      );
+      replaceMessage(conversation.id, tempId, persisted);
+    } catch (err) {
+      removeMessage(conversation.id, tempId);
+      toast.error(
+        "Couldn't send voice note",
+        extractApiError(err)?.message ?? "Try again in a moment."
+      );
+    } finally {
+      URL.revokeObjectURL(previewUrl);
+    }
+  }
+
+  // Layout chrome around the chat thread differs by perspective + viewport:
+  //   buyer    → BuyerTopNav (h-16 = 4rem) at top, BuyerBottomNav (h-16) at bottom on mobile only
+  //   seller   → no top nav on desktop; mobile shows a h-14 (3.5rem) header bar
+  // The thread height calc and the mobile negative-margin (which neutralises
+  // the buyer layout's bottom-tab padding) follow that.
+  const heightClass =
+    perspective === "buyer"
+      ? "h-[calc(100dvh-4rem)]"
+      : "h-[calc(100dvh-3.5rem)] md:h-dvh";
+  const buyerMobileOffset = perspective === "buyer" ? "-mb-20 md:mb-0" : "";
+
   return (
-    <div className="-mb-20 flex h-[calc(100dvh-4rem)] flex-col bg-background md:mb-0">
+    <div
+      className={`flex flex-col bg-background ${heightClass} ${buyerMobileOffset}`}
+    >
       <ChatHeader
         conversation={conversation}
         perspective={perspective}
         inboxHref={inboxHref}
       />
       <WarningBanner />
-      <MessageList messages={messages} currentUserId={currentUserId} />
-      <ChatInput onSend={handleSend} onSendImage={handleSendImage} />
+      <MessageList
+        messages={messages}
+        currentUserId={currentUserId}
+        perspective={perspective}
+      />
+      <ChatInput
+        conversationId={conversation.id}
+        perspective={perspective}
+        onSend={handleSend}
+        onSendImage={handleSendImage}
+        onSendVoice={handleSendVoice}
+        onInvoiceSent={(message) => addMessage(message)}
+      />
     </div>
   );
 }

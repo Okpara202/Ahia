@@ -7,7 +7,13 @@ import { disconnectSocket, getSocket } from "@/lib/socket";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationStore } from "@/store/notificationStore";
-import type { Message, MessageReaction, Notification } from "@/types";
+import type {
+  Invoice,
+  InvoiceStatus,
+  Message,
+  MessageReaction,
+  Notification,
+} from "@/types";
 
 interface MessagePayload {
   conversationId: string;
@@ -37,15 +43,35 @@ interface NotificationPayload {
   notification: Notification;
 }
 
+interface InvoiceStatusOnlyPayload {
+  invoiceId: string;
+  conversationId: string;
+}
+
+interface InvoiceLineStatusPayload {
+  lineId: string;
+  invoiceId: string;
+  conversationId: string;
+  invoiceStatus?: InvoiceStatus;
+  autoReleased?: boolean;
+  disputeId?: string;
+}
+
+interface InvoiceLineExtendedPayload {
+  lineId: string;
+  invoiceId: string;
+  conversationId: string;
+  autoReleaseAt: string;
+  extendedAt: string;
+  extensionReason: string;
+}
+
 /**
  * Wire the Socket.io connection while the user is authed. Mounted by
  * StoreHydrator, which lives in both buyer and seller layouts.
  *
- * Chat v1 event surface — see CHAT_V1_BACKEND_SPEC §7 for the full list.
- * Phase 1 handlers: message:new, message:edited, message:reaction_changed,
- * message:delivered, message:read, plus notifications. Invoice + typing
- * events are listened for (and ignored for now) so we don't spam server logs
- * with unhandled-event warnings; their UI lands in Phase 2/3.
+ * Chat v1 event surface — see CHAT_V1_BACKEND_SPEC §7 and backend's
+ * 2026-05-30 reply for the canonical event names.
  */
 export function useSocket() {
   const isAuthed = useAuthStore((s) => s.isAuthed);
@@ -57,6 +83,38 @@ export function useSocket() {
     }
 
     const socket = getSocket();
+
+    /* ---------------- helpers ---------------- */
+
+    /** Locate an invoice message in the store by invoiceId. */
+    function findInvoiceMessage(
+      conversationId: string,
+      invoiceId: string
+    ): (Message & { type: "invoice" }) | null {
+      const list =
+        useChatStore.getState().messagesByConversation[conversationId];
+      if (!list) return null;
+      for (const m of list) {
+        if (m.type === "invoice" && m.invoice.id === invoiceId) return m;
+      }
+      return null;
+    }
+
+    /** Replace the invoice on a message in-place. */
+    function patchInvoice(
+      conversationId: string,
+      invoiceId: string,
+      update: (current: Invoice) => Invoice
+    ) {
+      const target = findInvoiceMessage(conversationId, invoiceId);
+      if (!target) return;
+      useChatStore.getState().replaceMessage(conversationId, target.id, {
+        ...target,
+        invoice: update(target.invoice),
+      });
+    }
+
+    /* ---------------- handlers ---------------- */
 
     function onMessage(p: MessagePayload) {
       const message = mapMessage(p.message);
@@ -81,7 +139,6 @@ export function useSocket() {
     }
 
     function onDelivered(p: MessageDeliveredPayload) {
-      // Update the matching message's deliveredAt — sender side tick state.
       const store = useChatStore.getState();
       const list = store.messagesByConversation[p.conversationId];
       if (!list) return;
@@ -92,9 +149,6 @@ export function useSocket() {
     }
 
     function onRead(p: MessageReadPayload) {
-      // Backend already stamped the reads server-side. Update every message
-      // in this conversation up to throughMessageId that we sent (we're the
-      // sender, peer is the reader) and that doesn't already have readAt.
       const store = useChatStore.getState();
       const list = store.messagesByConversation[p.conversationId];
       if (!list) return;
@@ -119,6 +173,112 @@ export function useSocket() {
       useNotificationStore.getState().add(p.notification);
     }
 
+    /* ----- invoice events ----- */
+
+    function onInvoiceCancelled(p: InvoiceStatusOnlyPayload) {
+      patchInvoice(p.conversationId, p.invoiceId, (inv) => ({
+        ...inv,
+        status: "cancelled",
+        cancelledAt: new Date().toISOString(),
+      }));
+    }
+
+    function onInvoicePaid(p: InvoiceStatusOnlyPayload & { paidAt?: string }) {
+      patchInvoice(p.conversationId, p.invoiceId, (inv) => ({
+        ...inv,
+        status: "paid",
+        paidAt: p.paidAt ?? new Date().toISOString(),
+      }));
+    }
+
+    function onLineConfirmed(p: InvoiceLineStatusPayload) {
+      patchInvoice(p.conversationId, p.invoiceId, (inv) => {
+        const lines = inv.lines.map((l) =>
+          l.id === p.lineId
+            ? {
+                ...l,
+                status: "released" as const,
+                resolvedAt: new Date().toISOString(),
+                autoReleaseAt: null,
+              }
+            : l
+        );
+        return {
+          ...inv,
+          status: p.invoiceStatus ?? inv.status,
+          lines,
+        };
+      });
+    }
+
+    function onLineDisputed(p: InvoiceLineStatusPayload) {
+      patchInvoice(p.conversationId, p.invoiceId, (inv) => {
+        const lines = inv.lines.map((l) =>
+          l.id === p.lineId ? { ...l, autoReleaseAt: null } : l
+        );
+        return { ...inv, lines };
+      });
+    }
+
+    function onLineRefunded(p: InvoiceLineStatusPayload) {
+      patchInvoice(p.conversationId, p.invoiceId, (inv) => {
+        const lines = inv.lines.map((l) =>
+          l.id === p.lineId
+            ? {
+                ...l,
+                status: "refunded" as const,
+                resolvedAt: new Date().toISOString(),
+                autoReleaseAt: null,
+              }
+            : l
+        );
+        return {
+          ...inv,
+          status: p.invoiceStatus ?? inv.status,
+          lines,
+        };
+      });
+    }
+
+    function onLineReleasedByAdmin(p: InvoiceLineStatusPayload) {
+      // Admin sided with seller — same shape as buyer-confirm.
+      onLineConfirmed(p);
+    }
+
+    function onLineExtended(p: InvoiceLineExtendedPayload) {
+      patchInvoice(p.conversationId, p.invoiceId, (inv) => {
+        const lines = inv.lines.map((l) =>
+          l.id === p.lineId
+            ? {
+                ...l,
+                autoReleaseAt: p.autoReleaseAt,
+                extendedAt: p.extendedAt,
+                extensionReason: p.extensionReason,
+              }
+            : l
+        );
+        return { ...inv, lines };
+      });
+    }
+
+    function onInvoiceCreated(p: MessagePayload) {
+      // Backend emits this AND message:new. message:new handler already adds
+      // the message; if this fires first/only, ensure the invoice message
+      // lands too. addMessage is idempotent at the id level (replace would
+      // dedupe), but addMessage isn't. Use replaceMessage if it already
+      // exists, else add.
+      const message = mapMessage(p.message);
+      const store = useChatStore.getState();
+      const list = store.messagesByConversation[p.conversationId];
+      if (list?.some((m) => m.id === message.id)) {
+        store.replaceMessage(p.conversationId, message.id, message);
+      } else {
+        store.addMessage(message);
+      }
+    }
+
+    /* ---------------- wire up ---------------- */
+
     socket.on("message:new", onMessage);
     socket.on("message:edited", onMessageEdited);
     socket.on("message:reaction_changed", onReactionChanged);
@@ -126,6 +286,14 @@ export function useSocket() {
     socket.on("message:read", onRead);
     socket.on("image:new", onMessage);
     socket.on("notification:new", onNotification);
+    socket.on("invoice:created", onInvoiceCreated);
+    socket.on("invoice:cancelled", onInvoiceCancelled);
+    socket.on("invoice:paid", onInvoicePaid);
+    socket.on("invoice:line_confirmed", onLineConfirmed);
+    socket.on("invoice:line_disputed", onLineDisputed);
+    socket.on("invoice:line_extended", onLineExtended);
+    socket.on("invoice:line_released", onLineReleasedByAdmin);
+    socket.on("invoice:line_refunded", onLineRefunded);
 
     return () => {
       socket.off("message:new", onMessage);
@@ -135,6 +303,15 @@ export function useSocket() {
       socket.off("message:read", onRead);
       socket.off("image:new", onMessage);
       socket.off("notification:new", onNotification);
+      socket.off("invoice:created", onInvoiceCreated);
+      socket.off("invoice:cancelled", onInvoiceCancelled);
+      socket.off("invoice:paid", onInvoicePaid);
+      socket.off("invoice:line_confirmed", onLineConfirmed);
+      socket.off("invoice:line_disputed", onLineDisputed);
+      socket.off("invoice:line_extended", onLineExtended);
+      socket.off("invoice:line_released", onLineReleasedByAdmin);
+      socket.off("invoice:line_refunded", onLineRefunded);
     };
   }, [isAuthed]);
 }
+
