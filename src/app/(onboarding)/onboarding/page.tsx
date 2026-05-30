@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { Typography } from "@/components/Typography";
 import { OnboardingForm } from "./_components/OnboardingForm";
 
@@ -17,7 +19,11 @@ export default function OnboardingPage() {
           Pick a starting role — you can switch anytime from your profile.
         </Typography>
       </div>
-      <OnboardingForm />
+      {/* useSearchParams() inside OnboardingForm bails out of static prerender;
+          Suspense lets Next.js prerender the shell and stream the form in. */}
+      <Suspense fallback={null}>
+        <OnboardingForm />
+      </Suspense>
     </div>
   );
 }

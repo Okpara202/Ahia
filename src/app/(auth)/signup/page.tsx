@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 
 import { Typography } from "@/components/Typography";
@@ -27,9 +28,14 @@ export default function SignupPage() {
         </Typography>
       }
     >
-      <OAuthButtons context="signup" />
-      <AuthDivider />
-      <SignupForm />
+      {/* useSearchParams() inside OAuthButtons + SignupForm bails out of
+          static prerender — Suspense restores it. See /login for the same
+          pattern. */}
+      <Suspense fallback={null}>
+        <OAuthButtons context="signup" />
+        <AuthDivider />
+        <SignupForm />
+      </Suspense>
     </AuthCard>
   );
 }

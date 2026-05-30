@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 
 import { Typography } from "@/components/Typography";
@@ -27,9 +28,14 @@ export default function LoginPage() {
         </Typography>
       }
     >
-      <OAuthButtons context="login" />
-      <AuthDivider />
-      <LoginForm />
+      {/* useSearchParams() inside OAuthButtons + LoginForm forces this branch
+          out of static prerender. Suspense lets Next.js prerender the surrounding
+          shell and stream these in once URL params resolve. */}
+      <Suspense fallback={null}>
+        <OAuthButtons context="login" />
+        <AuthDivider />
+        <LoginForm />
+      </Suspense>
     </AuthCard>
   );
 }
