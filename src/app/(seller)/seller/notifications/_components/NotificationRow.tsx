@@ -1,0 +1,98 @@
+import Link from "next/link";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Gift,
+  Megaphone,
+  ShieldCheck,
+  Store,
+  Wallet,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
+
+import { Typography } from "@/components/Typography";
+import { formatRelativeTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { Notification, NotificationType } from "@/types";
+
+interface NotificationRowProps {
+  notification: Notification;
+}
+
+const ICON: Record<NotificationType, LucideIcon> = {
+  payment_paid: Wallet,
+  payment_received: Wallet,
+  payment_released: CheckCircle2,
+  dispute_opened: AlertTriangle,
+  dispute_resolved: ShieldCheck,
+  boost_purchased: Zap,
+  discover_campaign_started: Megaphone,
+  referral_completed: Gift,
+  shop_reopened: Store,
+};
+
+const ICON_TINT: Record<NotificationType, string> = {
+  payment_paid: "bg-primary/10 text-primary",
+  payment_received: "bg-primary/10 text-primary",
+  payment_released: "bg-success/15 text-success",
+  dispute_opened: "bg-destructive/15 text-destructive",
+  dispute_resolved: "bg-primary/10 text-primary",
+  boost_purchased: "bg-accent/15 text-accent",
+  discover_campaign_started: "bg-accent/15 text-accent",
+  referral_completed: "bg-success/15 text-success",
+  shop_reopened: "bg-primary/10 text-primary",
+};
+
+export function NotificationRow({ notification }: NotificationRowProps) {
+  const Icon = ICON[notification.type];
+  const tint = ICON_TINT[notification.type];
+
+  const inner = (
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-2xl border p-3 transition-colors",
+        notification.read
+          ? "border-border bg-card hover:bg-muted/40"
+          : "border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.06]"
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn("grid size-10 shrink-0 place-items-center rounded-lg", tint)}
+      >
+        <Icon className="size-4" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <Typography
+            variant="label-md"
+            className={cn(!notification.read && "font-semibold")}
+          >
+            {notification.title}
+          </Typography>
+          <Typography
+            variant="caption"
+            className="shrink-0 text-muted-foreground"
+          >
+            {formatRelativeTime(notification.createdAt)}
+          </Typography>
+        </div>
+        <Typography variant="body-sm" className="text-muted-foreground">
+          {notification.body}
+        </Typography>
+      </div>
+      {!notification.read && (
+        <span
+          aria-label="Unread"
+          className="mt-2 size-2 shrink-0 rounded-full bg-primary"
+        />
+      )}
+    </div>
+  );
+
+  if (notification.link) {
+    return <Link href={notification.link}>{inner}</Link>;
+  }
+  return <li>{inner}</li>;
+}
