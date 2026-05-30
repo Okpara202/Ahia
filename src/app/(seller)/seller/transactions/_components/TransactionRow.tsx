@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 import { Typography } from "@/components/Typography";
 import { formatNaira, formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -10,56 +8,38 @@ interface TransactionRowProps {
 }
 
 const STATUS_LABEL: Record<TransactionStatus, string> = {
-  pending: "Pending",
   held: "In escrow",
-  released: "Paid out",
-  refunded: "Refunded",
-  cancelled: "Cancelled",
-  disputed: "Disputed",
-  resolved_buyer: "Refunded",
-  resolved_seller: "Paid out",
+  partial_released: "Partially paid",
+  fully_released: "Paid out",
+  partial_refunded: "Partial refund",
+  fully_refunded: "Refunded",
 };
 
 const STATUS_TINT: Record<TransactionStatus, string> = {
-  pending: "bg-muted text-muted-foreground",
   held: "bg-warning/20 text-warning",
-  released: "bg-success/15 text-success",
-  refunded: "bg-muted text-muted-foreground",
-  cancelled: "bg-muted text-muted-foreground",
-  disputed: "bg-destructive/15 text-destructive",
-  resolved_buyer: "bg-muted text-muted-foreground",
-  resolved_seller: "bg-success/15 text-success",
+  partial_released: "bg-primary/15 text-primary",
+  fully_released: "bg-success/15 text-success",
+  partial_refunded: "bg-accent/15 text-accent",
+  fully_refunded: "bg-muted text-muted-foreground",
 };
 
 export function TransactionRow({ transaction }: TransactionRowProps) {
-  const { product, amount, platformFee, status, createdAt } = transaction;
-  const payout = amount - platformFee;
-
-  const thumbUrl =
-    product.media.type === "image"
-      ? product.media.url
-      : product.media.poster ?? "";
+  const { invoice, totalPaid, platformFee, status, paidAt, buyer } = transaction;
+  const payout = Number(totalPaid) - Number(platformFee);
+  const lineSummary =
+    invoice.lines.length === 1
+      ? invoice.lines[0].name
+      : `${invoice.lines.length} items`;
 
   return (
     <li className="flex items-center gap-3 p-3 sm:gap-4 sm:p-4">
-      <div className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-muted sm:size-14">
-        {thumbUrl && (
-          <Image
-            src={thumbUrl}
-            alt={product.name}
-            fill
-            sizes="56px"
-            className="object-cover"
-          />
-        )}
-      </div>
-
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <Typography variant="label-md" className="line-clamp-1">
-          {product.name}
+          {lineSummary}
         </Typography>
         <Typography variant="caption" className="text-muted-foreground">
-          {formatRelativeTime(createdAt)} • Fee {formatNaira(platformFee)}
+          {buyer.name} · {formatRelativeTime(paidAt)} · Fee{" "}
+          {formatNaira(Number(platformFee))}
         </Typography>
       </div>
 

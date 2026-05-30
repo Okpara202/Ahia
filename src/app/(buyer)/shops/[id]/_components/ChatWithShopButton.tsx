@@ -12,12 +12,10 @@ import { useAuthStore } from "@/store/authStore";
 import { toast } from "@/store/toastStore";
 
 interface ChatWithShopButtonProps {
-  shopId: string;
-  /** Owner of the shop. When provided and it matches the signed-in user, the
-   *  button is hidden entirely — you can't chat with yourself. Backend will
-   *  also reject self-conversations (queued ask), but skipping the render is
-   *  the right UX regardless. */
-  ownerId?: string;
+  /** Owner of the shop = the seller user id. Required since Chat v1 dedupes
+   *  by (buyer, seller). When this matches the signed-in user, the button
+   *  hides entirely — you can't chat with yourself. */
+  ownerId: string;
   /** When true, the button is rendered as disabled with paused-state copy.
    *  Backend will also reject `POST /conversations` with `403 shop_paused`,
    *  but disabling client-side avoids the round-trip + error toast. */
@@ -25,7 +23,6 @@ interface ChatWithShopButtonProps {
 }
 
 export function ChatWithShopButton({
-  shopId,
   ownerId,
   paused,
 }: ChatWithShopButtonProps) {
@@ -42,7 +39,7 @@ export function ChatWithShopButton({
     if (!requireAuth("to chat with this shop")) return;
     setOpening(true);
     try {
-      const { conversationId } = await startConversation({ shopId });
+      const { conversationId } = await startConversation({ sellerId: ownerId });
       router.push(`/inbox/${conversationId}`);
     } catch (err) {
       console.warn("[chat-with-shop] failed", err);

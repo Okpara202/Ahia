@@ -1,27 +1,24 @@
 import Link from "next/link";
 import Image from "next/image";
-import { BadgeCheck } from "lucide-react";
+import { Store } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { Conversation } from "@/types";
-import type { ChatPerspective } from "./ChatHeader";
+import type { ConversationListItem } from "@/types";
 
 interface ConversationRowProps {
-  conversation: Conversation;
-  perspective: ChatPerspective;
+  conversation: ConversationListItem;
   basePath: string;
 }
 
 export function ConversationRow({
   conversation,
-  perspective,
   basePath,
 }: ConversationRowProps) {
-  const { id, product, lastMessage, lastMessageAt, unread } = conversation;
-  const counterparty =
-    perspective === "buyer" ? conversation.seller : conversation.buyer;
+  const { id, counterparty, shop, lastMessage, lastActivityAt, unreadCount } =
+    conversation;
+  const unread = unreadCount > 0;
 
   return (
     <Link
@@ -29,45 +26,41 @@ export function ConversationRow({
       className={cn(
         "flex items-center gap-3 rounded-2xl border p-3 transition-colors",
         unread
-          ? "border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.06]"
+          ? "border-primary/30 bg-primary/3 hover:bg-primary/6"
           : "border-border bg-card hover:bg-muted/30"
       )}
     >
-      <div className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-muted">
-        {product.media.type === "image" ? (
+      <div className="relative size-12 shrink-0 overflow-hidden rounded-full bg-muted">
+        {counterparty.avatarUrl ? (
           <Image
-            src={product.media.url}
-            alt={product.name}
+            src={counterparty.avatarUrl}
+            alt={counterparty.name}
             fill
-            sizes="56px"
+            sizes="48px"
             className="object-cover"
           />
         ) : (
-          <Image
-            src={product.media.poster ?? ""}
-            alt={product.name}
-            fill
-            sizes="56px"
-            className="object-cover"
-          />
+          <span
+            aria-hidden
+            className="grid size-full place-items-center bg-primary/10 text-primary"
+          >
+            <Typography variant="label-md" className="font-bold">
+              {counterparty.name.charAt(0)}
+            </Typography>
+          </span>
         )}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <Typography variant="label-lg" className="truncate">
-              {counterparty.name}
-            </Typography>
-            {counterparty.verified && (
-              <BadgeCheck className="size-3.5 shrink-0 text-primary" />
-            )}
-          </div>
+          <Typography variant="label-lg" className="truncate">
+            {counterparty.name}
+          </Typography>
           <Typography
             variant="caption"
             className="shrink-0 text-muted-foreground"
           >
-            {formatRelativeTime(lastMessageAt)}
+            {formatRelativeTime(lastActivityAt)}
           </Typography>
         </div>
         <Typography
@@ -77,21 +70,26 @@ export function ConversationRow({
             unread ? "font-medium text-foreground" : "text-muted-foreground"
           )}
         >
-          {lastMessage}
+          {lastMessage?.snippet ?? "No messages yet"}
         </Typography>
-        <Typography
-          variant="caption"
-          className="line-clamp-1 text-muted-foreground"
-        >
-          About: {product.name}
-        </Typography>
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <Store className="size-3" />
+          <Typography variant="caption" className="line-clamp-1">
+            @{shop.handle}
+            {!shop.isActive && " · on a break"}
+          </Typography>
+        </div>
       </div>
 
       {unread && (
         <span
-          aria-label="Unread"
-          className="size-2.5 shrink-0 rounded-full bg-primary"
-        />
+          aria-label={`${unreadCount} unread`}
+          className="grid min-w-5 shrink-0 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-primary-foreground"
+        >
+          <Typography variant="label-sm" className="text-[10px] leading-none">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </Typography>
+        </span>
       )}
     </Link>
   );

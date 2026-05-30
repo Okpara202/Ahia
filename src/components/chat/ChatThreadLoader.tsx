@@ -9,8 +9,11 @@ import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/PageLoader";
 import { Typography } from "@/components/Typography";
 import { apiClient, extractApiError } from "@/lib/api";
-import { mapConversation, mapMessage } from "@/lib/services/conversations";
-import type { Conversation, Message } from "@/types";
+import {
+  mapConversationDetail,
+  mapMessage,
+} from "@/lib/services/conversations";
+import type { ConversationDetail, Message } from "@/types";
 import { ChatThread } from "./ChatThread";
 import type { ChatPerspective } from "./ChatHeader";
 
@@ -21,7 +24,7 @@ interface ChatThreadLoaderProps {
 }
 
 interface ConversationPayload {
-  conversation: Conversation;
+  conversation: ConversationDetail;
   messages: Message[];
 }
 
@@ -77,7 +80,7 @@ export function ChatThreadLoader({
           throw new Error("Empty conversation payload");
         }
         setData({
-          conversation: mapConversation(payload.conversation),
+          conversation: mapConversationDetail(payload.conversation),
           messages: (payload.messages ?? []).map(mapMessage),
         });
       })

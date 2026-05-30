@@ -86,15 +86,15 @@ export function ShopHeader({ shop, productCount }: ShopHeaderProps) {
                   ownerId={shop.ownerId}
                   initialFollowing={shop.isFollowing ?? false}
                 />
-                <ChatWithShopButton
-                  shopId={shop.id}
-                  ownerId={shop.ownerId}
-                  paused
-                />
+                {shop.ownerId && (
+                  <ChatWithShopButton ownerId={shop.ownerId} paused />
+                )}
               </>
             ) : (
               <>
-                <ChatWithShopButton shopId={shop.id} ownerId={shop.ownerId} />
+                {shop.ownerId && (
+                  <ChatWithShopButton ownerId={shop.ownerId} />
+                )}
                 <FollowButton
                   shopId={shop.id}
                   ownerId={shop.ownerId}

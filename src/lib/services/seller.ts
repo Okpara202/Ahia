@@ -2,7 +2,7 @@ import axios from "axios";
 
 import { apiClient, getApi } from "@/lib/api";
 import { getShopProducts } from "@/lib/services/shops";
-import { getTransactions } from "@/lib/services/transactions";
+import { getSellerTransactions as fetchSellerTransactions } from "@/lib/services/transactions";
 import type { Product, Shop, Transaction } from "@/types";
 
 function toNumber(v: unknown): number {
@@ -143,13 +143,12 @@ export async function getMyProducts(shopId: string): Promise<Product[]> {
 }
 
 /**
- * Seller's transaction history. Backend uses the session cookie to scope
- * results, so this is identical to `getTransactions()` — keeping the name
- * for read-site clarity ("seller transactions" reads naturally on the
- * seller dashboard).
+ * Seller's transaction history. Backed by the dedicated `/transactions/sales`
+ * endpoint shipped with Chat v1 — that endpoint scopes to the seller side
+ * of every invoice they've been paid for.
  */
 export async function getSellerTransactions(): Promise<Transaction[]> {
-  return getTransactions();
+  return fetchSellerTransactions();
 }
 
 export interface SellerDashboardStats {
@@ -176,6 +175,12 @@ export interface SellerDashboardStats {
  * count. The caller fetches both and passes them in so we don't double-
  * fetch transactions across the dashboard. When the backend ships an
  * aggregated stats endpoint, swap this for a single request.
+ *
+ * Chat v1: transactions are invoice-backed now. Each transaction has lines
+ * with per-line status. "Earned" sums released lines; "pending" sums the
+ * total minus already-released amounts. "Disputed" counts invoices with
+ * any disputed line — see the `status === 'disputed'` rollup on the
+ * invoice itself.
  */
 export function computeDashboardStats(
   transactions: Transaction[],
@@ -183,41 +188,72 @@ export function computeDashboardStats(
   now: number
 ): SellerDashboardStats {
   const DAY = 24 * 60 * 60 * 1000;
-  const released = transactions.filter((t) => t.status === "released");
+  const num = (s: string) => Number(s) || 0;
 
-  const totalEarned = released.reduce(
-    (sum, t) => sum + (t.amount - t.platformFee),
-    0
+  const releasedLineSum = (t: Transaction) =>
+    t.invoice.lines
+      .filter((l) => l.status === "released")
+      .reduce((sum, l) => sum + num(l.unitPrice) * l.quantity, 0);
+
+  const fullyReleased = transactions.filter(
+    (t) => t.status === "fully_released"
   );
+  const partialReleased = transactions.filter(
+    (t) => t.status === "partial_released"
+  );
+
+  // Total earned = sum of released-line totals minus the (proportional)
+  // platform fee. For now treat platformFee as the whole-transaction fee
+  // and only count it once a transaction is fully released — the
+  // partial-fee math will firm up when we see real responses.
+  const totalEarned =
+    fullyReleased.reduce(
+      (sum, t) => sum + num(t.totalPaid) - num(t.platformFee),
+      0
+    ) +
+    partialReleased.reduce((sum, t) => sum + releasedLineSum(t), 0);
+
+  // Pending payout = what's currently held in escrow waiting to release.
   const pendingPayout = transactions
-    .filter((t) => t.status === "held")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .filter(
+      (t) => t.status === "held" || t.status === "partial_released"
+    )
+    .reduce(
+      (sum, t) =>
+        sum +
+        Math.max(0, num(t.totalPaid) - releasedLineSum(t)),
+      0
+    );
+
+  // Open disputes are tracked at the invoice level via status='disputed'.
   const openDisputes = transactions.filter(
-    (t) => t.status === "disputed"
+    (t) => t.invoice.status === "disputed"
   ).length;
 
-  const thisWeek = released.filter(
-    (t) => now - new Date(t.createdAt).getTime() <= 7 * DAY
+  // Use paidAt as the "when this earned" timestamp.
+  const allReleased = [...fullyReleased, ...partialReleased];
+  const thisWeek = allReleased.filter(
+    (t) => now - new Date(t.paidAt).getTime() <= 7 * DAY
   );
-  const lastWeek = released.filter((t) => {
-    const ageMs = now - new Date(t.createdAt).getTime();
+  const lastWeek = allReleased.filter((t) => {
+    const ageMs = now - new Date(t.paidAt).getTime();
     return ageMs > 7 * DAY && ageMs <= 14 * DAY;
   });
 
   return {
     totalEarned,
     pendingPayout,
-    completedSales: released.length,
+    completedSales: fullyReleased.length,
     unreadConversations,
     openDisputes,
     thisWeekEarned: thisWeek.reduce(
-      (sum, t) => sum + (t.amount - t.platformFee),
+      (sum, t) => sum + releasedLineSum(t),
       0
     ),
     lastWeekEarned: lastWeek.reduce(
-      (sum, t) => sum + (t.amount - t.platformFee),
+      (sum, t) => sum + releasedLineSum(t),
       0
     ),
-    thisWeekSales: thisWeek.length,
+    thisWeekSales: thisWeek.filter((t) => t.status === "fully_released").length,
   };
 }

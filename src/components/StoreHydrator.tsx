@@ -12,7 +12,12 @@ import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useWishlistStore } from "@/store/wishlistStore";
-import type { Conversation, Notification, User, UserRole } from "@/types";
+import type {
+  ConversationListItem,
+  Notification,
+  User,
+  UserRole,
+} from "@/types";
 
 interface StoreHydratorProps {
   /** Server-fetched current user. `null` means the SSR layout couldn't reach
@@ -22,7 +27,7 @@ interface StoreHydratorProps {
    *  client-side recovery below handles the latter case. */
   user: User | null;
   activeRole: UserRole;
-  conversations: Conversation[];
+  conversations: ConversationListItem[];
   notifications: Notification[];
 }
 

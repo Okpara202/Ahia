@@ -17,10 +17,11 @@ import { cn } from "@/lib/utils";
 import type { Notification, NotificationType } from "@/types";
 
 const ICON_MAP: Record<NotificationType, LucideIcon> = {
-  payment_paid: CircleDollarSign,
-  payment_received: CircleDollarSign,
-  payment_released: CheckCircle2,
-  dispute_opened: AlertTriangle,
+  invoice_received: CircleDollarSign,
+  invoice_paid: CircleDollarSign,
+  invoice_received_payment: CircleDollarSign,
+  invoice_line_released: CheckCircle2,
+  invoice_line_disputed: AlertTriangle,
   dispute_resolved: ShieldCheck,
   boost_purchased: Zap,
   discover_campaign_started: Megaphone,
@@ -29,10 +30,11 @@ const ICON_MAP: Record<NotificationType, LucideIcon> = {
 };
 
 const TINT_MAP: Record<NotificationType, string> = {
-  payment_paid: "bg-primary/10 text-primary",
-  payment_received: "bg-primary/10 text-primary",
-  payment_released: "bg-success/15 text-success",
-  dispute_opened: "bg-destructive/10 text-destructive",
+  invoice_received: "bg-primary/10 text-primary",
+  invoice_paid: "bg-primary/10 text-primary",
+  invoice_received_payment: "bg-primary/10 text-primary",
+  invoice_line_released: "bg-success/15 text-success",
+  invoice_line_disputed: "bg-destructive/10 text-destructive",
   dispute_resolved: "bg-primary/10 text-primary",
   boost_purchased: "bg-accent/15 text-accent",
   discover_campaign_started: "bg-accent/15 text-accent",

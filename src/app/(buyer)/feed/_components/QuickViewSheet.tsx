@@ -79,10 +79,21 @@ export function QuickViewSheet({ product, onClose }: QuickViewSheetProps) {
 
   async function handleChat() {
     if (isOwner) return;
+    if (!shop.ownerId) {
+      toast.error("Couldn't open chat", "Seller info isn't available yet.");
+      return;
+    }
     setOpening(true);
     try {
-      const { conversationId } = await startConversation({ productId: id });
-      router.push(`/inbox/${conversationId}`);
+      // Chat v1: dedupe by (buyer, seller); product becomes a per-message
+      // context attached to the buyer's first message. Backend treats
+      // contextProductId on POST /conversations as a hint only — the
+      // first actual message we send needs to carry it.
+      const { conversationId } = await startConversation({
+        sellerId: shop.ownerId,
+        contextProductId: id,
+      });
+      router.push(`/inbox/${conversationId}?ctx=${id}`);
     } catch (err) {
       console.warn("[quick-view-chat] failed", err);
       const code = extractApiError(err)?.code;

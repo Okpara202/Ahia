@@ -1,7 +1,6 @@
 import axios from "axios";
 
-import { getApi } from "@/lib/api";
-import { MOCK_REVIEWS } from "@/lib/mocks/reviews";
+import { apiClient, getApi } from "@/lib/api";
 import type { Review } from "@/types";
 
 export interface ProductReviews {
@@ -16,7 +15,7 @@ function mapReview(raw: unknown): Review {
     id: String(r.id),
     productId: String(r.productId ?? ""),
     shopId: String(r.shopId ?? ""),
-    transactionId: String(r.transactionId ?? ""),
+    invoiceLineId: String(r.invoiceLineId ?? ""),
     authorId: String(r.authorId ?? ""),
     authorName: String(r.authorName ?? ""),
     rating: Number(r.rating ?? 0),
@@ -26,9 +25,8 @@ function mapReview(raw: unknown): Review {
 }
 
 /**
- * Get reviews for a product, plus the aggregate score.
- * Backend returns the aggregate inline so the UI gets count/average in one
- * round-trip.
+ * Get reviews for a product + aggregate score. Backend returns the
+ * aggregate inline so UI gets count/average in one round-trip.
  */
 export async function getProductReviews(
   productId: string
@@ -53,9 +51,23 @@ export async function getProductReviews(
   }
 }
 
-/** Find a single review by transaction ID — used by post-tx prompt to detect
- *  whether the buyer has already rated this purchase. Still on mocks; will
- *  move to backend when `/transactions/:id/review` lands. */
-export function reviewForTransaction(transactionId: string): Review | null {
-  return MOCK_REVIEWS.find((r) => r.transactionId === transactionId) ?? null;
+interface SubmitReviewArgs {
+  invoiceLineId: string;
+  rating: number;
+  body?: string;
+}
+
+/**
+ * Buyer submits a review for a released invoice line. Backend derives
+ * product + shop from the line — frontend only sends the line id.
+ * Chat v1 changed the contract from (transactionId, productId, shopId)
+ * to just invoiceLineId.
+ */
+export async function submitReview(args: SubmitReviewArgs): Promise<Review> {
+  const { data } = await apiClient().post<{ review: unknown }>("/reviews", {
+    invoiceLineId: args.invoiceLineId,
+    rating: args.rating,
+    body: args.body,
+  });
+  return mapReview(data.review);
 }

@@ -12,7 +12,7 @@ import {
   getSellerTransactions,
 } from "@/lib/services/seller";
 import { useSellerShopStore } from "@/store/sellerShopStore";
-import type { Conversation, Transaction } from "@/types";
+import type { ConversationListItem, Transaction } from "@/types";
 import { DashboardStats } from "./DashboardStats";
 import { DisputeAlert } from "./DisputeAlert";
 import { EarningsMomentum } from "./EarningsMomentum";
@@ -23,7 +23,7 @@ import { RecentTransactions } from "./RecentTransactions";
 export function SellerDashboard() {
   const shop = useSellerShopStore((s) => s.shop);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   // Capture "now" once at mount so render stays pure (React 19 flags
   // Date.now() inside render bodies). Recomputed only when transactions or
@@ -51,7 +51,7 @@ export function SellerDashboard() {
   // never drift. When backend ships an aggregated /seller/stats endpoint
   // we can swap this for a single fetch.
   const stats = useMemo(() => {
-    const unread = conversations.filter((c) => c.unread).length;
+    const unread = conversations.filter((c) => c.unreadCount > 0).length;
     return computeDashboardStats(transactions, unread, now);
   }, [transactions, conversations, now]);
 
@@ -101,7 +101,7 @@ export function SellerDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <RecentTransactions transactions={transactions.slice(0, 5)} />
         <RecentConversations
-          conversations={conversations.filter((c) => c.unread).slice(0, 5)}
+          conversations={conversations.filter((c) => c.unreadCount > 0).slice(0, 5)}
         />
       </div>
     </div>

@@ -3,13 +3,15 @@ import { ArrowRight, MessageCircle } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
 import { formatRelativeTime } from "@/lib/format";
-import type { Conversation } from "@/types";
+import type { ConversationListItem } from "@/types";
 
 interface RecentConversationsProps {
-  conversations: Conversation[];
+  conversations: ConversationListItem[];
 }
 
-export function RecentConversations({ conversations }: RecentConversationsProps) {
+export function RecentConversations({
+  conversations,
+}: RecentConversationsProps) {
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:p-5">
       <header className="flex items-center justify-between">
@@ -45,32 +47,34 @@ export function RecentConversations({ conversations }: RecentConversationsProps)
                   className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
                 >
                   <Typography variant="label-md">
-                    {c.buyer.name.charAt(0)}
+                    {c.counterparty.name.charAt(0)}
                   </Typography>
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex items-baseline justify-between gap-2">
                     <Typography variant="label-md" className="truncate">
-                      {c.buyer.name}
+                      {c.counterparty.name}
                     </Typography>
                     <Typography
                       variant="caption"
                       className="shrink-0 text-muted-foreground"
                     >
-                      {formatRelativeTime(c.lastMessageAt)}
+                      {formatRelativeTime(c.lastActivityAt)}
                     </Typography>
                   </div>
                   <Typography
                     variant="body-sm"
                     className="line-clamp-1 text-muted-foreground"
                   >
-                    {c.lastMessage}
+                    {c.lastMessage?.snippet ?? "No messages yet"}
                   </Typography>
                 </div>
-                <span
-                  aria-hidden
-                  className="mt-2 size-2 shrink-0 rounded-full bg-primary"
-                />
+                {c.unreadCount > 0 && (
+                  <span
+                    aria-hidden
+                    className="mt-2 size-2 shrink-0 rounded-full bg-primary"
+                  />
+                )}
               </Link>
             </li>
           ))}

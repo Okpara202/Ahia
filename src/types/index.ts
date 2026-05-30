@@ -171,22 +171,61 @@ export interface User {
   createdAt: string;
 }
 
-export type MessageType =
-  | "text"
-  | "payment_request"
-  | "system"
-  | "offer"
-  | "image";
+/* -------------------------------------------------------------------------- */
+/*  Chat v1 types (shipped 2026-05-30 with backend's redesigned chat layer)   */
+/* -------------------------------------------------------------------------- */
 
-export type PaymentRequestStatus = "pending" | "paid" | "cancelled";
+export type MessageType = "text" | "voice" | "image" | "invoice" | "system";
 
-export type OfferStatus = "pending" | "accepted" | "declined" | "countered";
+/** Minimal user shape returned inside conversations/messages. Backend returns
+ *  `{id, name, avatarUrl}` — no `handle`/`verified` on chat embeds (those
+ *  live on the full Shop record). */
+export interface ChatUser {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+/** Shop embedded on conversation responses. Carries enough for the chat
+ *  header link + paused-state guard. */
+export interface ChatShop {
+  id: string;
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+  isActive: boolean;
+}
+
+/** Per-message "Asking about: X" snapshot. Embedded at send time so a later
+ *  product rename doesn't rewrite history. Backend returns `price` as a
+ *  decimal string. */
+export interface MessageContextProduct {
+  id: string;
+  name: string;
+  price: string;
+  coverUrl: string;
+}
+
+export interface MessageReaction {
+  userId: string;
+  emoji: string;
+}
 
 export interface BaseMessage {
   id: string;
   conversationId: string;
   senderId: string;
   createdAt: string;
+  /** Non-null when the message has been edited (text-only, 15-min window). */
+  editedAt: string | null;
+  /** For messages YOU sent: when counterparty received it. For incoming
+   *  messages: when you received it. */
+  deliveredAt: string | null;
+  /** Same convention as deliveredAt. Read-receipt tick state. */
+  readAt: string | null;
+  reactions: MessageReaction[];
+  /** Optional product context attached WhatsApp-reply-style at send time. */
+  contextProduct: MessageContextProduct | null;
 }
 
 export interface TextMessage extends BaseMessage {
@@ -194,17 +233,25 @@ export interface TextMessage extends BaseMessage {
   content: string;
 }
 
-/**
- * Legacy message kind from earlier mocks. The backend doesn't emit these in
- * v1 — buyer-initiated `offer` + buyer "Pay" via `POST /transactions { productId }`
- * carries that flow now. Kept in the union so existing mock data still
- * type-checks; rendered as a quiet read-only card.
- */
-export interface PaymentRequestMessage extends BaseMessage {
-  type: "payment_request";
-  amount: number;
-  status: PaymentRequestStatus;
-  note?: string;
+export interface VoiceMessage extends BaseMessage {
+  type: "voice";
+  voiceUrl: string;
+  voiceDurationMs: number;
+  /** Voice messages don't have body content — backend returns null. */
+  content: null;
+}
+
+export interface ImageMessage extends BaseMessage {
+  type: "image";
+  imageUrl: string;
+  /** Caption stored in `content` per backend. Null when omitted. */
+  content: string | null;
+}
+
+export interface InvoiceMessage extends BaseMessage {
+  type: "invoice";
+  invoice: Invoice;
+  content: null;
 }
 
 export interface SystemMessage extends BaseMessage {
@@ -212,93 +259,149 @@ export interface SystemMessage extends BaseMessage {
   content: string;
 }
 
-export interface OfferMessage extends BaseMessage {
-  type: "offer";
-  amount: number;
-  status: OfferStatus;
-  note?: string;
-}
-
-export interface ImageMessage extends BaseMessage {
-  type: "image";
-  url: string;
-  alt?: string;
-  caption?: string;
-}
-
 export type Message =
   | TextMessage
-  | PaymentRequestMessage
-  | SystemMessage
-  | OfferMessage
-  | ImageMessage;
+  | VoiceMessage
+  | ImageMessage
+  | InvoiceMessage
+  | SystemMessage;
 
-export interface ConversationParty {
+/* -- Invoices --------------------------------------------------------------- */
+
+export type InvoiceLineKind = "product" | "custom" | "discount";
+
+export type InvoiceLineStatus = "pending" | "released" | "refunded";
+
+export interface InvoiceLine {
   id: string;
+  kind: InvoiceLineKind;
+  /** Non-null only when kind='product'. */
+  productId: string | null;
+  /** Snapshotted at invoice creation. Stable even if product is renamed later. */
   name: string;
-  handle: string;
-  verified: boolean;
+  quantity: number;
+  /** Decimal string. Negative for kind='discount'. */
+  unitPrice: string;
+  status: InvoiceLineStatus;
+  position: number;
+  /** When status moved to released or refunded. */
+  resolvedAt: string | null;
 }
 
-export interface Conversation {
+export type InvoiceStatus =
+  | "pending"
+  | "paid"
+  | "partial_released"
+  | "fully_released"
+  | "partial_refunded"
+  | "fully_refunded"
+  | "cancelled"
+  | "disputed";
+
+export interface Invoice {
   id: string;
-  buyer: ConversationParty;
-  seller: ConversationParty;
-  product: { id: string; name: string; price: number; media: Media };
-  lastMessage: string;
-  lastMessageAt: string;
-  unread: boolean;
+  status: InvoiceStatus;
+  /** Sum of line totals (qty × unitPrice incl. discounts). Decimal string. */
+  totalAmount: string;
+  paystackRef: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  lines: InvoiceLine[];
 }
+
+/* -- Conversation: list view vs detail view --------------------------------- */
+
+/** Entry in `GET /conversations`. The list shape is different from the
+ *  detail shape — list collapses the buyer/seller into "counterparty"
+ *  (the one that ISN'T the requester) and includes a server-rendered
+ *  message snippet. */
+export interface ConversationListItem {
+  id: string;
+  counterparty: ChatUser;
+  shop: ChatShop;
+  lastMessage: {
+    id: string;
+    type: MessageType;
+    /** Pre-rendered preview text — already includes emoji prefix for
+     *  non-text types ("🎤 Voice (0:42)", "📷 Photo", "🧾 Invoice ₦25,500"). */
+    snippet: string;
+    senderId: string;
+    createdAt: string;
+  } | null;
+  lastActivityAt: string;
+  unreadCount: number;
+}
+
+/** The `conversation` field inside `GET /conversations/:id`. Explicit
+ *  buyer + seller (no `participants[]` array). The product reference is
+ *  per-message now — there's no longer one product per conversation. */
+export interface ConversationDetail {
+  id: string;
+  buyer: ChatUser;
+  seller: ChatUser;
+  shop: ChatShop;
+  createdAt: string;
+  lastActivityAt: string;
+}
+
+/* -- Transactions (invoice-backed) ----------------------------------------- */
 
 export type TransactionStatus =
-  | "pending"
   | "held"
-  | "released"
-  | "refunded"
-  | "cancelled"
-  | "disputed"
-  /** Dispute resolution outcomes. */
-  | "resolved_buyer"
-  | "resolved_seller";
+  | "partial_released"
+  | "fully_released"
+  | "partial_refunded"
+  | "fully_refunded";
 
+/** Transactions are now read-only and back the invoice flow.
+ *  Money movement happens via invoice-line confirm/dispute, not on
+ *  the transaction itself. */
 export interface Transaction {
   id: string;
-  product: { id: string; name: string; media: Media };
-  shop: { id: string; name: string; handle: string };
-  amount: number;
-  platformFee: number;
+  invoiceId: string;
+  buyerId: string;
+  sellerId: string;
+  /** Decimal string. */
+  totalPaid: string;
+  /** Decimal string. */
+  platformFee: string;
+  paystackRef: string;
   status: TransactionStatus;
-  createdAt: string;
+  paidAt: string;
+  invoice: Invoice;
+  buyer: ChatUser;
+  seller: ChatUser;
 }
+
+/* -- Reviews (per invoice line) -------------------------------------------- */
 
 export interface Review {
   id: string;
-  /** Product the buyer is rating. */
   productId: string;
-  /** Shop the product belongs to. Denormalized for shop-level aggregation. */
   shopId: string;
-  /** Originating transaction — every review is anchored to a completed sale. */
-  transactionId: string;
-  /** Buyer who left the review. */
+  /** Originating invoice line — each released line earns one optional review. */
+  invoiceLineId: string;
   authorId: string;
   authorName: string;
-  /** 1-5 stars. */
   rating: number;
-  /** Optional free-text body, max ~280 chars at write time. */
   body?: string;
   createdAt: string;
 }
 
+/* -- Notifications --------------------------------------------------------- */
+
 /**
- * Notification types emitted by the backend. The frontend renders type-specific
- * copy per CLAUDE.md §15. Keep this in sync with the `notifications.type` enum
- * defined in the backend.
+ * Notification types emitted by the backend. Keep in sync with backend's
+ * `notifications.type` enum. Chat v1 replaced the old `payment_*` types
+ * with invoice-flow events.
  */
 export type NotificationType =
-  | "payment_paid"
-  | "payment_received"
-  | "payment_released"
-  | "dispute_opened"
+  | "invoice_received"
+  | "invoice_paid"
+  | "invoice_received_payment"
+  | "invoice_line_released"
+  | "invoice_line_disputed"
   | "dispute_resolved"
   | "boost_purchased"
   | "discover_campaign_started"
@@ -317,26 +420,20 @@ export interface Notification {
   link?: string;
 }
 
-/**
- * Dispute lifecycle states from the backend's Prisma enum.
- * - `open` — buyer just raised it; admin hasn't touched yet
- * - `resolved_buyer` — admin sided with the buyer; funds refunded
- * - `resolved_seller` — admin sided with the seller; funds released
- * - `cancelled` — buyer or admin withdrew before resolution
- */
-export type DisputeStatus =
-  | "open"
-  | "resolved_buyer"
-  | "resolved_seller"
-  | "cancelled";
+/* -- Disputes (per invoice line) ------------------------------------------- */
+
+export type DisputeStatus = "open" | "reviewing" | "resolved";
+
+export type DisputeResolution = "refunded_to_buyer" | "released_to_seller";
 
 export interface Dispute {
   id: string;
-  transactionId: string;
+  invoiceLineId: string;
   raisedById: string;
   reason: string;
+  evidenceUrl: string | null;
   status: DisputeStatus;
-  resolution: string | null;
+  resolution: DisputeResolution | null;
   createdAt: string;
   resolvedAt: string | null;
 }

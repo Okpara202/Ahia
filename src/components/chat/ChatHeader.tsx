@@ -1,55 +1,72 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, BadgeCheck } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
-import { formatNaira } from "@/lib/format";
-import type { Conversation } from "@/types";
+import type { ConversationDetail } from "@/types";
 
 export type ChatPerspective = "buyer" | "seller";
 
 interface ChatHeaderProps {
-  conversation: Conversation;
+  conversation: ConversationDetail;
   perspective: ChatPerspective;
   inboxHref: string;
 }
 
+/**
+ * Top bar for an open chat thread.
+ *
+ * Chat v1: conversations are per-seller, not per-product, so there's no
+ * single product to badge here. Buyer perspective shows the counterparty
+ * (seller user) and links the row to the seller's storefront via the
+ * embedded shop record. Seller perspective shows the buyer with no link
+ * (we don't have a buyer-profile page).
+ */
 export function ChatHeader({
   conversation,
   perspective,
   inboxHref,
 }: ChatHeaderProps) {
-  const { product } = conversation;
   const counterparty =
     perspective === "buyer" ? conversation.seller : conversation.buyer;
-  const counterpartyHref =
-    perspective === "buyer" ? `/shops/${counterparty.id}` : null;
+  const shopHref =
+    perspective === "buyer" ? `/shops/${conversation.shop.id}` : null;
+
+  const Avatar = counterparty.avatarUrl ? (
+    <Image
+      src={counterparty.avatarUrl}
+      alt={counterparty.name}
+      width={36}
+      height={36}
+      className="size-9 shrink-0 rounded-full object-cover"
+    />
+  ) : (
+    <span
+      aria-hidden
+      className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
+    >
+      <Typography variant="label-md" className="font-bold">
+        {counterparty.name.charAt(0)}
+      </Typography>
+    </span>
+  );
 
   const NameBlock = (
     <>
-      <span
-        aria-hidden
-        className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
-      >
-        <Typography variant="label-md" className="font-bold">
-          {counterparty.name.charAt(0)}
-        </Typography>
-      </span>
+      {Avatar}
       <div className="flex min-w-0 flex-col">
-        <div className="flex items-center gap-1">
-          <Typography variant="label-lg" className="truncate">
-            {counterparty.name}
-          </Typography>
-          {counterparty.verified && (
-            <BadgeCheck className="size-3.5 shrink-0 text-primary" />
-          )}
-        </div>
-        <Typography
-          variant="caption"
-          className="truncate text-muted-foreground"
-        >
-          {counterparty.handle}
+        <Typography variant="label-lg" className="truncate">
+          {counterparty.name}
         </Typography>
+        {perspective === "buyer" && (
+          <Typography
+            variant="caption"
+            className="truncate text-muted-foreground"
+          >
+            @{conversation.shop.handle}
+            {!conversation.shop.isActive && " · on a break"}
+          </Typography>
+        )}
       </div>
     </>
   );
@@ -64,51 +81,19 @@ export function ChatHeader({
         <ArrowLeft className="size-4" />
       </Link>
 
-      {counterpartyHref ? (
+      {shopHref ? (
         <Link
-          href={counterpartyHref}
+          href={shopHref}
           className="flex min-w-0 flex-1 items-center gap-3 transition-opacity hover:opacity-80"
         >
           {NameBlock}
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
         </Link>
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {NameBlock}
         </div>
       )}
-
-      <Link
-        href={`/products/${product.id}`}
-        className="hidden items-center gap-2 rounded-xl border border-border bg-card p-1.5 pr-3 transition-colors hover:border-primary/40 sm:flex"
-      >
-        <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-muted">
-          {product.media.type === "image" ? (
-            <Image
-              src={product.media.url}
-              alt={product.name}
-              fill
-              sizes="36px"
-              className="object-cover"
-            />
-          ) : (
-            <Image
-              src={product.media.poster ?? ""}
-              alt={product.name}
-              fill
-              sizes="36px"
-              className="object-cover"
-            />
-          )}
-        </div>
-        <div className="flex min-w-0 flex-col">
-          <Typography variant="caption" className="line-clamp-1">
-            {product.name}
-          </Typography>
-          <Typography variant="price-sm" className="text-primary">
-            {formatNaira(product.price)}
-          </Typography>
-        </div>
-      </Link>
     </header>
   );
 }

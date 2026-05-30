@@ -58,10 +58,20 @@ export function ProductDetails({
   async function handleChatClick() {
     if (paused || isOwner) return;
     if (!requireAuth("to message the shop")) return;
+    if (!shop.ownerId) {
+      toast.error("Couldn't open chat", "Seller info isn't available yet.");
+      return;
+    }
     setOpening(true);
     try {
-      const { conversationId } = await startConversation({ productId: id });
-      router.push(`/inbox/${conversationId}`);
+      // Chat v1: pass the seller user id. Product becomes a per-message
+      // context attached to the first message we send — see ChatThread for
+      // where the ?ctx= query is consumed.
+      const { conversationId } = await startConversation({
+        sellerId: shop.ownerId,
+        contextProductId: id,
+      });
+      router.push(`/inbox/${conversationId}?ctx=${id}`);
     } catch (err) {
       console.warn("[product-chat] failed", err);
       const code = extractApiError(err)?.code;

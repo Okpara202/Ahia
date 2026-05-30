@@ -21,10 +21,11 @@ interface NotificationRowProps {
 }
 
 const ICON: Record<NotificationType, LucideIcon> = {
-  payment_paid: Wallet,
-  payment_received: Wallet,
-  payment_released: CheckCircle2,
-  dispute_opened: AlertTriangle,
+  invoice_received: Wallet,
+  invoice_paid: Wallet,
+  invoice_received_payment: Wallet,
+  invoice_line_released: CheckCircle2,
+  invoice_line_disputed: AlertTriangle,
   dispute_resolved: ShieldCheck,
   boost_purchased: Zap,
   discover_campaign_started: Megaphone,
@@ -33,10 +34,11 @@ const ICON: Record<NotificationType, LucideIcon> = {
 };
 
 const ICON_TINT: Record<NotificationType, string> = {
-  payment_paid: "bg-primary/10 text-primary",
-  payment_received: "bg-primary/10 text-primary",
-  payment_released: "bg-success/15 text-success",
-  dispute_opened: "bg-destructive/15 text-destructive",
+  invoice_received: "bg-primary/10 text-primary",
+  invoice_paid: "bg-primary/10 text-primary",
+  invoice_received_payment: "bg-primary/10 text-primary",
+  invoice_line_released: "bg-success/15 text-success",
+  invoice_line_disputed: "bg-destructive/15 text-destructive",
   dispute_resolved: "bg-primary/10 text-primary",
   boost_purchased: "bg-accent/15 text-accent",
   discover_campaign_started: "bg-accent/15 text-accent",

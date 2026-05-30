@@ -1,133 +1,69 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import axios from "axios";
 
 import { ConversationRow } from "@/components/chat/ConversationRow";
 import { EmptyInboxIllustration } from "@/components/illustrations";
 import { PageLoader } from "@/components/PageLoader";
 import { Typography } from "@/components/Typography";
-import { startConversation } from "@/lib/actions/conversations";
-import {
-  getConversations,
-} from "@/lib/services/conversations";
 import { extractApiError } from "@/lib/api";
-import { toast } from "@/store/toastStore";
-import type { Conversation } from "@/types";
-import type { ChatPerspective } from "./ChatHeader";
+import { getConversations } from "@/lib/services/conversations";
+import { useChatStore } from "@/store/chatStore";
+import type { ConversationListItem } from "@/types";
 
 interface InboxListClientProps {
-  perspective: ChatPerspective;
   basePath: string;
-  /** Page-level heading copy + empty state. */
   heading: string;
   emptyTitle: string;
   emptyBody: string;
-  /** Buyer-only deep links handed in by the server shell. Seller route ignores. */
-  productDeepLink?: string;
-  shopDeepLink?: string;
 }
 
 /**
- * Client-side loader for the inbox list page. Two responsibilities:
+ * Client-side inbox list. Cross-origin SSR can't see the session cookie
+ * (CLAUDE.md §11c) so the fetch happens client-side.
  *
- *   1. Fetch the conversation list (cross-origin SSR can't see the session
- *      cookie — same constraint as the thread page). See CLAUDE.md §11c.
- *   2. Handle the buyer-side `?product=...` / `?shop=...` deep link that
- *      lands here from "Message the shop" CTAs. We find-or-create the
- *      conversation, then `router.replace()` to the thread.
- *
- * Shared between buyer and seller. Seller never passes deep-link params.
+ * Reads the inbox from the live conversation store first (so live socket
+ * updates flow through) and reconciles with the server's response on mount.
  */
 export function InboxListClient({
-  perspective,
   basePath,
   heading,
   emptyTitle,
   emptyBody,
-  productDeepLink,
-  shopDeepLink,
 }: InboxListClientProps) {
-  const router = useRouter();
-  const [conversations, setConversations] = useState<Conversation[] | null>(
-    null
-  );
-  const isDeepLinking = !!(productDeepLink || shopDeepLink);
+  const storeList = useChatStore((s) => s.conversations);
+  const setConversations = useChatStore((s) => s.setConversations);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-
-    if (productDeepLink || shopDeepLink) {
-      // Deep-link path — resolve the conversation, replace the URL with the
-      // thread, never render the list under it.
-      startConversation({
-        productId: productDeepLink,
-        shopId: shopDeepLink,
-      })
-        .then(({ conversationId }) => {
-          if (cancelled) return;
-          router.replace(`${basePath}/${conversationId}`);
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          const code = extractApiError(err)?.code;
-          if (code === "shop_paused" || code === "shop_gone") {
-            toast.error(
-              "This seller is on a break",
-              "Follow them to know when they reopen."
-            );
-          } else if (code === "self_conversation") {
-            toast.error("That's your own shop", "You can't message yourself.");
-          } else if (!axios.isAxiosError(err) || err.response?.status !== 401) {
-            // 401 is already redirected by the auth interceptor. Anything else
-            // — fall through to the list view rather than hanging on a loader.
-            toast.error(
-              "Couldn't open that chat",
-              extractApiError(err)?.message ?? "Try again in a moment."
-            );
-          }
-          // Fall back to loading the regular inbox.
-          getConversations()
-            .then((list) => !cancelled && setConversations(list))
-            .catch(() => !cancelled && setConversations([]));
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
 
     getConversations()
       .then((list) => {
         if (cancelled) return;
         setConversations(list);
+        setLoaded(true);
       })
       .catch((err) => {
         if (cancelled) return;
-        // 401 → interceptor handles. Any other failure → render empty list
-        // (graceful degrade; user can refresh).
         console.warn("[inbox-list] failed", {
           apiErr: extractApiError(err),
         });
-        setConversations([]);
+        // Graceful degrade — render empty (or whatever's in the store).
+        setLoaded(true);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [productDeepLink, shopDeepLink, basePath, router]);
+  }, [setConversations]);
 
-  if (isDeepLinking && !conversations) {
-    return <PageLoader fullScreen={false} label="Opening conversation…" />;
+  if (!loaded && storeList.length === 0) {
+    return <PageLoader fullScreen={false} label="Loading your inbox…" />;
   }
 
-  if (!conversations) {
-    return (
-      <PageLoader fullScreen={false} label="Loading your inbox…" />
-    );
-  }
-
-  const unread = conversations.filter((c) => c.unread).length;
+  const list: ConversationListItem[] = storeList;
+  const unread = list.reduce((n, c) => n + c.unreadCount, 0);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -140,7 +76,7 @@ export function InboxListClient({
         )}
       </header>
 
-      {conversations.length === 0 ? (
+      {list.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-10 text-center">
           <EmptyInboxIllustration className="size-32 text-primary/40" />
           <Typography variant="heading-h4">{emptyTitle}</Typography>
@@ -150,11 +86,10 @@ export function InboxListClient({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {conversations.map((c) => (
+          {list.map((c) => (
             <ConversationRow
               key={c.id}
               conversation={c}
-              perspective={perspective}
               basePath={basePath}
             />
           ))}

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
@@ -12,26 +11,22 @@ interface RecentTransactionsProps {
 }
 
 const STATUS_LABEL: Record<TransactionStatus, string> = {
-  pending: "Pending",
   held: "In escrow",
-  released: "Paid out",
-  refunded: "Refunded",
-  cancelled: "Cancelled",
-  disputed: "Disputed",
-  resolved_buyer: "Refunded",
-  resolved_seller: "Paid out",
+  partial_released: "Partially paid",
+  fully_released: "Paid out",
+  partial_refunded: "Partial refund",
+  fully_refunded: "Refunded",
 };
 
 const STATUS_TINT: Record<TransactionStatus, string> = {
-  pending: "bg-muted text-muted-foreground",
   held: "bg-warning/20 text-warning",
-  released: "bg-success/15 text-success",
-  refunded: "bg-muted text-muted-foreground",
-  cancelled: "bg-muted text-muted-foreground",
-  disputed: "bg-destructive/15 text-destructive",
-  resolved_buyer: "bg-muted text-muted-foreground",
-  resolved_seller: "bg-success/15 text-success",
+  partial_released: "bg-primary/15 text-primary",
+  fully_released: "bg-success/15 text-success",
+  partial_refunded: "bg-accent/15 text-accent",
+  fully_refunded: "bg-muted text-muted-foreground",
 };
+
+const num = (s: string) => Number(s) || 0;
 
 export function RecentTransactions({ transactions }: RecentTransactionsProps) {
   return (
@@ -48,58 +43,54 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
       </header>
 
       {transactions.length === 0 ? (
-        <Typography variant="body-sm" className="py-6 text-center text-muted-foreground">
+        <Typography
+          variant="body-sm"
+          className="py-6 text-center text-muted-foreground"
+        >
           No sales yet.
         </Typography>
       ) : (
         <ul className="flex flex-col gap-2">
-          {transactions.map((t) => (
-            <li
-              key={t.id}
-              className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-muted/60"
-            >
-              <div className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-muted">
-                {t.product.media.type === "image" ? (
-                  <Image
-                    src={t.product.media.url}
-                    alt={t.product.name}
-                    fill
-                    sizes="48px"
-                    className="object-cover"
-                  />
-                ) : (
-                  <Image
-                    src={t.product.media.poster ?? ""}
-                    alt={t.product.name}
-                    fill
-                    sizes="48px"
-                    className="object-cover"
-                  />
-                )}
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <Typography variant="label-md" className="truncate">
-                  {t.product.name}
-                </Typography>
-                <Typography variant="caption" className="text-muted-foreground">
-                  {formatRelativeTime(t.createdAt)}
-                </Typography>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <Typography variant="price-sm" className="text-foreground">
-                  {formatNaira(t.amount - t.platformFee)}
-                </Typography>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5",
-                    STATUS_TINT[t.status]
-                  )}
-                >
-                  <Typography variant="label-sm">{STATUS_LABEL[t.status]}</Typography>
-                </span>
-              </div>
-            </li>
-          ))}
+          {transactions.map((t) => {
+            const lineSummary =
+              t.invoice.lines.length === 1
+                ? t.invoice.lines[0].name
+                : `${t.invoice.lines.length} items`;
+            const payout = num(t.totalPaid) - num(t.platformFee);
+            return (
+              <li
+                key={t.id}
+                className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-muted/60"
+              >
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <Typography variant="label-md" className="truncate">
+                    {lineSummary}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    className="text-muted-foreground"
+                  >
+                    {t.buyer.name} · {formatRelativeTime(t.paidAt)}
+                  </Typography>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Typography variant="price-sm" className="text-foreground">
+                    {formatNaira(payout)}
+                  </Typography>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5",
+                      STATUS_TINT[t.status]
+                    )}
+                  >
+                    <Typography variant="label-sm">
+                      {STATUS_LABEL[t.status]}
+                    </Typography>
+                  </span>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

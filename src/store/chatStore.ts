@@ -1,34 +1,42 @@
 import { create } from "zustand";
 
-import type { Conversation, Message } from "@/types";
+import type { ConversationListItem, Message } from "@/types";
 
-function previewFor(message: Message): string {
+/**
+ * Build an inbox-row snippet for an optimistic local message. The server
+ * always sends a pre-rendered snippet on the conversation list response,
+ * but optimistic local messages need their own preview until the server
+ * echo arrives.
+ */
+function localSnippet(message: Message): string {
   switch (message.type) {
     case "text":
-      return message.content;
-    case "payment_request":
-      return `Payment request • ₦${message.amount.toLocaleString("en-NG")}`;
+      return message.content.slice(0, 80);
+    case "voice":
+      return `🎤 Voice`;
+    case "image":
+      return message.content ? `📷 ${message.content}` : "📷 Photo";
+    case "invoice":
+      return `🧾 Invoice ₦${Number(message.invoice.totalAmount).toLocaleString("en-NG")}`;
     case "system":
       return message.content;
-    case "offer":
-      return `Offer • ₦${message.amount.toLocaleString("en-NG")}`;
-    case "image":
-      return message.caption ? `📷 ${message.caption}` : "📷 Photo";
   }
 }
 
 interface ChatState {
-  conversations: Conversation[];
-  /** messages keyed by conversationId */
+  conversations: ConversationListItem[];
+  /** Messages keyed by conversationId. */
   messagesByConversation: Record<string, Message[]>;
-  /** ids of conversations whose chat thread is currently open in a tab */
+  /** Conversation ids whose thread is currently open in a tab — used by
+   *  notification handlers to skip badge updates for the active chat. */
   openConversationIds: string[];
   unreadCount: number;
 
-  setConversations: (conversations: Conversation[]) => void;
+  setConversations: (items: ConversationListItem[]) => void;
   setMessages: (conversationId: string, messages: Message[]) => void;
   addMessage: (message: Message) => void;
-  /** Replace a message in-place (used to update offer status, etc.). */
+  /** Replace a message in-place (used to swap optimistic → persisted, or
+   *  apply an edit / reaction update). */
   replaceMessage: (
     conversationId: string,
     messageId: string,
@@ -36,13 +44,15 @@ interface ChatState {
   ) => void;
   /** Drop a message by id — used to roll back optimistic sends on failure. */
   removeMessage: (conversationId: string, messageId: string) => void;
+  /** Zero the unreadCount for a conversation. The server-side mark-read
+   *  call is fired by the chat page when it opens. */
   markConversationRead: (id: string) => void;
   openConversation: (id: string) => void;
   closeConversation: (id: string) => void;
 }
 
-const computeUnread = (conversations: Conversation[]) =>
-  conversations.reduce((n, c) => n + (c.unread ? 1 : 0), 0);
+const computeTotalUnread = (list: ConversationListItem[]) =>
+  list.reduce((n, c) => n + c.unreadCount, 0);
 
 export const useChatStore = create<ChatState>((set) => ({
   conversations: [],
@@ -51,7 +61,7 @@ export const useChatStore = create<ChatState>((set) => ({
   unreadCount: 0,
 
   setConversations: (conversations) =>
-    set({ conversations, unreadCount: computeUnread(conversations) }),
+    set({ conversations, unreadCount: computeTotalUnread(conversations) }),
 
   setMessages: (conversationId, messages) =>
     set((state) => ({
@@ -68,16 +78,36 @@ export const useChatStore = create<ChatState>((set) => ({
         ...state.messagesByConversation,
         [message.conversationId]: [...prev, message],
       };
-      const conversations = state.conversations.map((c) =>
-        c.id === message.conversationId
-          ? {
-              ...c,
-              lastMessage: previewFor(message),
-              lastMessageAt: message.createdAt,
-            }
-          : c
+      // Bump the matching inbox row's snippet + lastActivityAt locally so
+      // the list updates immediately. Server echoes the same on next list
+      // fetch with a properly rendered snippet.
+      const isOpen = state.openConversationIds.includes(
+        message.conversationId
       );
-      return { messagesByConversation, conversations };
+      const conversations = state.conversations.map((c) => {
+        if (c.id !== message.conversationId) return c;
+        const counterpartyIsSender = c.counterparty.id === message.senderId;
+        return {
+          ...c,
+          lastMessage: {
+            id: message.id,
+            type: message.type,
+            snippet: localSnippet(message),
+            senderId: message.senderId,
+            createdAt: message.createdAt,
+          },
+          lastActivityAt: message.createdAt,
+          unreadCount:
+            counterpartyIsSender && !isOpen
+              ? c.unreadCount + 1
+              : c.unreadCount,
+        };
+      });
+      return {
+        messagesByConversation,
+        conversations,
+        unreadCount: computeTotalUnread(conversations),
+      };
     }),
 
   replaceMessage: (conversationId, messageId, updated) =>
@@ -107,9 +137,12 @@ export const useChatStore = create<ChatState>((set) => ({
   markConversationRead: (id) =>
     set((state) => {
       const conversations = state.conversations.map((c) =>
-        c.id === id ? { ...c, unread: false } : c
+        c.id === id ? { ...c, unreadCount: 0 } : c
       );
-      return { conversations, unreadCount: computeUnread(conversations) };
+      return {
+        conversations,
+        unreadCount: computeTotalUnread(conversations),
+      };
     }),
 
   openConversation: (id) =>

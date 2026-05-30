@@ -15,6 +15,7 @@ interface ImageMessageCardProps {
 
 export function ImageMessageCard({ message, mine }: ImageMessageCardProps) {
   const [lightbox, setLightbox] = useState(false);
+  const caption = message.content;
 
   return (
     <>
@@ -34,16 +35,17 @@ export function ImageMessageCard({ message, mine }: ImageMessageCardProps) {
           )}
         >
           <Image
-            src={message.url}
-            alt={message.alt ?? "Shared image"}
+            src={message.imageUrl}
+            alt={caption ?? "Shared image"}
             fill
             sizes="208px"
             className="object-cover"
+            unoptimized={message.imageUrl.startsWith("blob:")}
           />
         </button>
-        {message.caption && (
+        {caption && (
           <Typography variant="caption" className="px-1 text-muted-foreground">
-            {message.caption}
+            {caption}
           </Typography>
         )}
       </div>
@@ -60,11 +62,12 @@ export function ImageMessageCard({ message, mine }: ImageMessageCardProps) {
           </button>
           <div className="relative h-[90vh] w-full max-w-4xl">
             <Image
-              src={message.url}
-              alt={message.alt ?? "Shared image"}
+              src={message.imageUrl}
+              alt={caption ?? "Shared image"}
               fill
               sizes="100vw"
               className="object-contain"
+              unoptimized={message.imageUrl.startsWith("blob:")}
             />
           </div>
         </div>

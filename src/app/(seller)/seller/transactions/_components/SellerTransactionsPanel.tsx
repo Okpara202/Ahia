@@ -9,6 +9,14 @@ import { getSellerTransactions } from "@/lib/services/seller";
 import type { Transaction } from "@/types";
 import { TransactionRow } from "./TransactionRow";
 
+const num = (s: string) => Number(s) || 0;
+
+function releasedLineSum(t: Transaction) {
+  return t.invoice.lines
+    .filter((l) => l.status === "released")
+    .reduce((sum, l) => sum + num(l.unitPrice) * l.quantity, 0);
+}
+
 export function SellerTransactionsPanel() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -40,12 +48,29 @@ export function SellerTransactionsPanel() {
     );
   }
 
-  const totalEarned = transactions
-    .filter((t) => t.status === "released")
-    .reduce((sum, t) => sum + (t.amount - t.platformFee), 0);
+  // Total earned: fully-released transactions net of fee, plus released-line
+  // totals from partial transactions. Mirrors the dashboard math in
+  // lib/services/seller.ts so the two surfaces never drift.
+  const fullyReleased = transactions.filter(
+    (t) => t.status === "fully_released"
+  );
+  const partial = transactions.filter((t) => t.status === "partial_released");
+
+  const totalEarned =
+    fullyReleased.reduce(
+      (sum, t) => sum + num(t.totalPaid) - num(t.platformFee),
+      0
+    ) + partial.reduce((sum, t) => sum + releasedLineSum(t), 0);
+
+  // Pending payout = totalPaid minus what's already released, for anything
+  // still holding funds. `held` means nothing released yet;
+  // `partial_released` means some is.
   const pending = transactions
-    .filter((t) => t.status === "held")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .filter((t) => t.status === "held" || t.status === "partial_released")
+    .reduce(
+      (sum, t) => sum + Math.max(0, num(t.totalPaid) - releasedLineSum(t)),
+      0
+    );
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">

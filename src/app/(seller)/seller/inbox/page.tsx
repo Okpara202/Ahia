@@ -5,7 +5,6 @@ export const metadata = { title: "Inbox — Ahia Seller" };
 export default function SellerInboxPage() {
   return (
     <InboxListClient
-      perspective="seller"
       basePath="/seller/inbox"
       heading="Inbox"
       emptyTitle="Quiet for now"

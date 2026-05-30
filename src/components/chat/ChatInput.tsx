@@ -1,19 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { HandCoins, ImagePlus, Send } from "lucide-react";
+import { ImagePlus, Mic, Send } from "lucide-react";
 
+import { toast } from "@/store/toastStore";
 import { ChatAttachSheet } from "./ChatAttachSheet";
 
 interface ChatInputProps {
   onSend: (text: string) => void;
-  onSendOffer: (amount: number, note?: string) => void;
   onSendImage: (file: File, caption?: string) => void;
 }
 
-type SheetMode = "offer" | "image" | null;
+type SheetMode = "image" | null;
 
-export function ChatInput({ onSend, onSendOffer, onSendImage }: ChatInputProps) {
+export function ChatInput({ onSend, onSendImage }: ChatInputProps) {
   const [text, setText] = useState("");
   const [sheet, setSheet] = useState<SheetMode>(null);
 
@@ -31,6 +31,15 @@ export function ChatInput({ onSend, onSendOffer, onSendImage }: ChatInputProps) 
     }
   }
 
+  function showVoiceComingSoon() {
+    // Voice recorder lands in Phase 2. The mic button is stubbed here so
+    // the layout doesn't shift when it ships.
+    toast.info(
+      "Voice notes are coming",
+      "We're building the recorder right now. Use text for now."
+    );
+  }
+
   return (
     <div className="border-t border-border bg-background/95 px-4 pb-20 pt-3 backdrop-blur-md sm:px-6 md:pb-3">
       <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
@@ -45,12 +54,12 @@ export function ChatInput({ onSend, onSendOffer, onSendImage }: ChatInputProps) 
         </button>
         <button
           type="button"
-          onClick={() => setSheet("offer")}
-          aria-label="Make an offer"
-          title="Make an offer"
-          className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent/15 hover:text-accent"
+          onClick={showVoiceComingSoon}
+          aria-label="Record voice note"
+          title="Voice notes coming soon"
+          className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <HandCoins className="size-5" />
+          <Mic className="size-5" />
         </button>
         <textarea
           value={text}
@@ -74,10 +83,6 @@ export function ChatInput({ onSend, onSendOffer, onSendImage }: ChatInputProps) 
       <ChatAttachSheet
         mode={sheet}
         onClose={() => setSheet(null)}
-        onSendOffer={(amount, note) => {
-          onSendOffer(amount, note);
-          setSheet(null);
-        }}
         onSendImage={(file, caption) => {
           onSendImage(file, caption);
           setSheet(null);
