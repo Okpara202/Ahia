@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/AuthGate";
 import { ChatThreadLoader } from "@/components/chat/ChatThreadLoader";
 
 export const metadata = { title: "Conversation — Ahia Seller" };
@@ -9,10 +10,12 @@ interface SellerChatPageProps {
 export default async function SellerChatPage({ params }: SellerChatPageProps) {
   const { id } = await params;
   return (
-    <ChatThreadLoader
-      id={id}
-      perspective="seller"
-      inboxHref="/seller/inbox"
-    />
+    <AuthGate redirectTo="/login">
+      <ChatThreadLoader
+        id={id}
+        perspective="seller"
+        inboxHref="/seller/inbox"
+      />
+    </AuthGate>
   );
 }
