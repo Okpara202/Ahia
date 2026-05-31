@@ -430,6 +430,11 @@ export interface Notification {
   read: boolean;
   createdAt: string;
   link?: string;
+  /** Soft-delete timestamp. Set when the user archives via DELETE
+   *  /notifications/:id — backend then excludes the row from future
+   *  GET /notifications responses. Frontend uses this only as a sanity
+   *  flag; we usually drop archived rows from local state directly. */
+  archivedAt?: string | null;
 }
 
 /* -- Disputes (per invoice line) ------------------------------------------- */

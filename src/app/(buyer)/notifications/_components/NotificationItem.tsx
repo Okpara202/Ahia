@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -8,6 +10,7 @@ import {
   Megaphone,
   ShieldCheck,
   Store,
+  X,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -18,7 +21,9 @@ import {
   notificationBody,
   notificationTitle,
 } from "@/lib/notifications";
+import { archiveNotification } from "@/lib/services/notifications";
 import { cn } from "@/lib/utils";
+import { useNotificationStore } from "@/store/notificationStore";
 import type { Notification, NotificationType } from "@/types";
 
 const ICON_MAP: Record<NotificationType, LucideIcon> = {
@@ -58,6 +63,17 @@ export function NotificationItem({
   const tint = TINT_MAP[notification.type];
   const title = notificationTitle(notification);
   const body = notificationBody(notification);
+
+  function handleArchive(e: React.MouseEvent<HTMLButtonElement>) {
+    // Stop the click bubbling to the wrapping <Link> so we don't navigate
+    // when the user just wanted to dismiss the row.
+    e.preventDefault();
+    e.stopPropagation();
+    useNotificationStore.getState().remove(notification.id);
+    void archiveNotification(notification.id).catch(() => {
+      // Best-effort. If backend fails, the row reappears on next list fetch.
+    });
+  }
 
   const content = (
     <div
@@ -101,6 +117,15 @@ export function NotificationItem({
           {formatRelativeTime(notification.createdAt)}
         </Typography>
       </div>
+      <button
+        type="button"
+        onClick={handleArchive}
+        aria-label="Dismiss notification"
+        title="Dismiss"
+        className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground opacity-60 transition-all hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
+      >
+        <X className="size-4" />
+      </button>
     </div>
   );
 

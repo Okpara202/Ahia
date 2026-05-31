@@ -9,6 +9,9 @@ interface NotificationState {
   add: (notification: Notification) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  /** Optimistically remove a notification from the list — used right after
+   *  the user taps × on a row, before the DELETE request completes. */
+  remove: (id: string) => void;
 }
 
 const computeUnread = (items: Notification[]) =>
@@ -35,4 +38,9 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       items: state.items.map((it) => ({ ...it, read: true })),
       unreadCount: 0,
     })),
+  remove: (id) =>
+    set((state) => {
+      const items = state.items.filter((it) => it.id !== id);
+      return { items, unreadCount: computeUnread(items) };
+    }),
 }));

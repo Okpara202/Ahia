@@ -384,13 +384,28 @@ export async function markConversationRead(
 /**
  * Discriminated union — what the seller composer sends per line.
  *
- * For `product` lines, the backend snapshots the product's current `name`
- * and `unitPrice` at send time, so we only forward `productId` + `quantity`.
- * For `custom` and `discount` lines, we must supply `name` and `unitPrice`
- * (discount = negative).
+ * For `product` lines, `unitPrice` and `name` are optional overrides — when
+ * present, backend uses them on the invoice line; when absent, backend
+ * snapshots from the products table at send time. Sellers haggle in chat
+ * and the final agreed price often differs from the card; the override lets
+ * the invoice reflect what was actually agreed.
+ *
+ * NOTE: Until backend ships override support (see
+ * FRONTEND_ASK_invoice_line_price_override.md, 2026-05-31), `unitPrice` and
+ * `name` on product lines are silently stripped by their Zod schema — the
+ * invoice will use the listed product price regardless. Sending them is
+ * safe; they just don't take effect yet.
  */
 export type InvoiceLineDraft =
-  | { kind: "product"; productId: string; quantity: number }
+  | {
+      kind: "product";
+      productId: string;
+      quantity: number;
+      /** Optional override — defaults to the product's listed price when omitted. */
+      unitPrice?: number;
+      /** Optional override — defaults to the product's name when omitted. */
+      name?: string;
+    }
   | {
       kind: "custom";
       name: string;

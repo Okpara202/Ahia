@@ -5,14 +5,21 @@ import type { Notification, NotificationType } from "@/types";
 
 function mapNotification(raw: unknown): Notification {
   const r = raw as Record<string, unknown>;
+  // Backend's `readAt` is null until the user marks read; we expose as a
+  // boolean for the UI. Same with `archivedAt`.
+  const readAt = r.readAt ?? r.read;
+  const read =
+    typeof readAt === "boolean" ? readAt : typeof readAt === "string";
   return {
     id: String(r.id),
     type: r.type as NotificationType,
     title: String(r.title ?? ""),
     body: String(r.body ?? ""),
-    read: Boolean(r.read ?? false),
+    read,
     createdAt: String(r.createdAt ?? new Date().toISOString()),
     link: (r.link as string | undefined) ?? undefined,
+    archivedAt:
+      typeof r.archivedAt === "string" ? r.archivedAt : null,
   };
 }
 
@@ -38,4 +45,12 @@ export async function markNotificationRead(id: string): Promise<void> {
 export async function markAllNotificationsRead(): Promise<void> {
   const api = await getApi();
   await api.patch("/notifications/read-all");
+}
+
+/** Soft-delete (archive) a notification. Backend marks it archived and
+ *  excludes from subsequent list responses. 204 No Content on success and
+ *  on no-op (already archived / wrong user). */
+export async function archiveNotification(id: string): Promise<void> {
+  const api = await getApi();
+  await api.delete(`/notifications/${id}`);
 }

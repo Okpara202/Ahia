@@ -204,17 +204,28 @@ export function InvoiceComposer({
     );
   }
 
+  function updateLinePrice(uid: string, newMinor: number) {
+    const clamped = Math.max(0, Math.round(newMinor));
+    setLines((prev) =>
+      prev.map((l) => (l.uid === uid ? { ...l, unitPriceMinor: clamped } : l))
+    );
+  }
+
   async function handleSend() {
     if (!canSend) return;
     setSending(true);
-    // Backend snapshots `name` and `unitPrice` for product lines from the
-    // products table at send time — we only forward productId + quantity.
+    // We always forward `unitPrice` on product lines so the seller's possibly-
+    // haggled price ends up on the invoice. Until backend ships the override
+    // support (see FRONTEND_ASK_invoice_line_price_override.md), this field
+    // is silently dropped server-side and the listed price is used regardless
+    // — sending it now is forward-compat, no current downside.
     const payload: InvoiceLineDraft[] = lines.map((l): InvoiceLineDraft => {
       if (l.kind === "product") {
         return {
           kind: "product",
           productId: l.productId as string,
           quantity: l.quantity,
+          unitPrice: l.unitPriceMinor,
         };
       }
       if (l.kind === "discount") {
@@ -307,6 +318,7 @@ export function InvoiceComposer({
               lines={lines}
               onRemove={removeLine}
               onAdjust={adjustQty}
+              onUpdatePrice={updateLinePrice}
               onOpenProductPicker={() => setPanel("product-picker")}
               onOpenCustom={() => setPanel("custom")}
               onOpenDiscount={() => setPanel("discount")}
@@ -401,6 +413,7 @@ interface LinesViewProps {
   lines: DraftLine[];
   onRemove: (uid: string) => void;
   onAdjust: (uid: string, delta: number) => void;
+  onUpdatePrice: (uid: string, newMinor: number) => void;
   onOpenProductPicker: () => void;
   onOpenCustom: () => void;
   onOpenDiscount: () => void;
@@ -410,6 +423,7 @@ function LinesView({
   lines,
   onRemove,
   onAdjust,
+  onUpdatePrice,
   onOpenProductPicker,
   onOpenCustom,
   onOpenDiscount,
@@ -439,6 +453,7 @@ function LinesView({
               line={line}
               onRemove={onRemove}
               onAdjust={onAdjust}
+              onUpdatePrice={onUpdatePrice}
             />
           ))}
         </ul>
@@ -473,10 +488,17 @@ interface LineRowProps {
   line: DraftLine;
   onRemove: (uid: string) => void;
   onAdjust: (uid: string, delta: number) => void;
+  onUpdatePrice: (uid: string, newMinor: number) => void;
 }
 
-function LineRow({ line, onRemove, onAdjust }: LineRowProps) {
+function LineRow({
+  line,
+  onRemove,
+  onAdjust,
+  onUpdatePrice,
+}: LineRowProps) {
   const isDiscount = line.kind === "discount";
+  const isProduct = line.kind === "product";
   const total = line.unitPriceMinor * line.quantity;
   return (
     <li className="flex items-stretch gap-3 rounded-2xl border border-border bg-card p-3">
@@ -495,22 +517,29 @@ function LineRow({ line, onRemove, onAdjust }: LineRowProps) {
           <Sparkles className="size-5" />
         )}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
         <Typography variant="label-md" className="line-clamp-1">
           {line.name}
         </Typography>
-        <div className="flex items-center gap-2">
-          <Typography
-            variant="caption"
-            className={cn(
-              "font-mono tabular-nums",
-              isDiscount ? "text-accent" : "text-muted-foreground"
-            )}
-          >
-            {isDiscount ? "−" : ""}
-            {formatNaira(line.unitPriceMinor)}
-            {line.quantity > 1 && ` × ${line.quantity}`}
-          </Typography>
+        <div className="flex flex-wrap items-center gap-2">
+          {isProduct ? (
+            <PriceInput
+              value={line.unitPriceMinor}
+              onCommit={(v) => onUpdatePrice(line.uid, v)}
+            />
+          ) : (
+            <Typography
+              variant="caption"
+              className={cn(
+                "font-mono tabular-nums",
+                isDiscount ? "text-accent" : "text-muted-foreground"
+              )}
+            >
+              {isDiscount ? "−" : ""}
+              {formatNaira(line.unitPriceMinor)}
+              {line.quantity > 1 && ` × ${line.quantity}`}
+            </Typography>
+          )}
           {!isDiscount && (
             <div className="ml-auto flex items-center gap-1">
               <QtyButton
@@ -554,6 +583,61 @@ function LineRow({ line, onRemove, onAdjust }: LineRowProps) {
         <X className="size-3.5" />
       </button>
     </li>
+  );
+}
+
+/**
+ * Inline editable price for product lines. Styled to feel like a value, not
+ * a form input — so the row stays compact — but tabbing/clicking opens it
+ * for edit. Commits on blur / Enter, clamps to >= 0.
+ *
+ * Parent's `value` is the source of truth; local `draft` only holds the
+ * user's in-flight text while the input is focused. This avoids the
+ * "derived-state in useState" anti-pattern and removes the need for a
+ * prop-syncing useEffect.
+ */
+function PriceInput({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (newMinor: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = draft ?? String(value);
+
+  function commit() {
+    if (draft === null) return;
+    const n = Math.max(0, Math.round(Number(draft) || 0));
+    setDraft(null);
+    if (n !== value) onCommit(n);
+  }
+
+  return (
+    <label className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/30 px-2 py-0.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
+      <span
+        aria-hidden
+        className="font-mono text-xs text-muted-foreground"
+      >
+        ₦
+      </span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        value={display}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }
+        }}
+        aria-label="Price (Naira)"
+        className="w-20 bg-transparent font-mono text-sm tabular-nums outline-none"
+      />
+    </label>
   );
 }
 

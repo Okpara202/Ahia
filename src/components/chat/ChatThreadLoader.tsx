@@ -51,6 +51,10 @@ export function ChatThreadLoader({
   const router = useRouter();
   const [data, setData] = useState<ConversationPayload | null>(null);
   const [error, setError] = useState<"not_found" | "other" | null>(null);
+  // Bumping this re-runs the fetch effect. Used by the bfcache `pageshow`
+  // listener so returning from Paystack doesn't leave a stale or stuck
+  // loading state behind. See the listener below for the full reasoning.
+  const [refetchTick, setRefetchTick] = useState(0);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -68,8 +72,14 @@ export function ChatThreadLoader({
           // place. Both are belts-and-braces — either one alone would work.
           // Remove once the backend disables ETag on authed endpoints or we
           // move same-origin.
-          params: { _t: id },
+          params: { _t: `${id}-${refetchTick}` },
           validateStatus: (s) => s >= 200 && s < 400,
+          // Without an explicit timeout axios waits indefinitely. If the
+          // backend stalls (or the connection drops mid-flight), we'd be
+          // stuck on the PageLoader forever. 30s is generous enough that a
+          // healthy server always wins, but short enough that a real hang
+          // surfaces an error instead of a perpetual spinner.
+          timeout: 30_000,
         }
       )
       .then(({ data: payload }) => {
@@ -79,6 +89,8 @@ export function ChatThreadLoader({
           // to the "other" branch rather than crashing the mapper.
           throw new Error("Empty conversation payload");
         }
+        // Clear any error from a prior fetch attempt (bfcache refetch case).
+        setError(null);
         setData({
           conversation: mapConversationDetail(payload.conversation),
           messages: (payload.messages ?? []).map(mapMessage),
@@ -105,7 +117,23 @@ export function ChatThreadLoader({
       });
 
     return () => ctrl.abort();
-  }, [id]);
+  }, [id, refetchTick]);
+
+  // Refresh on bfcache restoration. When the buyer taps Pay we hand off to
+  // Paystack via `window.location.href` — a hard nav. If they cancel and hit
+  // back, the browser may restore this page from bfcache instead of
+  // remounting. That leaves React state frozen as it was, so a `null` data
+  // (still-loading) state would stick forever. Bumping `refetchTick` forces
+  // the fetch effect to re-run, which also picks up any backend updates to
+  // the invoice (e.g. Paystack failure webhook). `event.persisted === true`
+  // is the canonical bfcache signal.
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) setRefetchTick((n) => n + 1);
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
 
   if (error === "not_found") {
     return (

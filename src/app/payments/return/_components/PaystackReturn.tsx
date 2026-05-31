@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import axios from "axios";
 import { AlertTriangle, Check, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,9 @@ interface PaystackResolution {
 
 const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_ATTEMPTS = 20;
+// After this many polls with no resolution, surface an "exit" button so the
+// user isn't trapped on the spinner if Paystack is being slow.
+const SHOW_ESCAPE_AFTER_ATTEMPTS = 4;
 
 export function PaystackReturn() {
   const params = useSearchParams();
@@ -28,6 +32,7 @@ export function PaystackReturn() {
   const [status, setStatus] = useState<Status>("pending");
   const [next, setNext] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [attemptCount, setAttemptCount] = useState(0);
 
   useEffect(() => {
     if (!reference) {
@@ -42,6 +47,7 @@ export function PaystackReturn() {
 
     async function poll() {
       attempts += 1;
+      setAttemptCount(attempts);
       try {
         const { data } = await apiClient().get<PaystackResolution>(
           `/payments/verify/${reference}`
@@ -60,6 +66,20 @@ export function PaystackReturn() {
         }
       } catch (err) {
         if (cancelled) return;
+        // 4xx (other than 401 which the interceptor handles) is a permanent
+        // failure — the transaction record says it failed or doesn't exist.
+        // Stop polling and surface the message instead of spinning for 30s.
+        const code = axios.isAxiosError(err) ? err.response?.status : undefined;
+        if (code && code >= 400 && code < 500 && code !== 401) {
+          setMessage(
+            extractApiError(err)?.message ??
+              "The payment did not complete."
+          );
+          setStatus("failed");
+          return;
+        }
+        // 5xx / network — keep polling but remember the latest message so
+        // the eventual timeout card has something useful to show.
         setMessage(extractApiError(err)?.message ?? "");
       }
       if (attempts >= POLL_MAX_ATTEMPTS) {
@@ -76,6 +96,7 @@ export function PaystackReturn() {
   }, [reference]);
 
   if (status === "pending") {
+    const showEscape = attemptCount >= SHOW_ESCAPE_AFTER_ATTEMPTS;
     return (
       <div className="flex flex-col items-center gap-3 text-center">
         <Loader2 className="size-8 animate-spin text-primary" />
@@ -83,6 +104,17 @@ export function PaystackReturn() {
         <Typography variant="body-sm" className="text-muted-foreground">
           Hold on — this usually takes a few seconds.
         </Typography>
+        {showEscape && (
+          <>
+            <Typography variant="caption" className="text-muted-foreground">
+              Taking longer than expected. You can come back later — we&apos;ll
+              notify you the moment it resolves.
+            </Typography>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/inbox">Back to inbox</Link>
+            </Button>
+          </>
+        )}
       </div>
     );
   }

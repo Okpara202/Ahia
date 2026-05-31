@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -116,6 +116,22 @@ export function InvoiceCard({ message, isBuyer, mine }: InvoiceCardProps) {
       );
     }
   }
+
+  // Reset the "Paying…" spinner when the user returns to this page via the
+  // browser back button after a Paystack decline/cancel. The pay handler
+  // navigates away via `window.location.href`, so it never gets to clear
+  // `paying` itself — and on bfcache restore React preserves state without
+  // re-running effects. Without this, the Pay button is stuck spinning
+  // until a full reload. `event.persisted === true` is the bfcache signal.
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted && paying) {
+        setPaying(false);
+      }
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [paying]);
 
   async function handleCancel() {
     if (cancelling) return;

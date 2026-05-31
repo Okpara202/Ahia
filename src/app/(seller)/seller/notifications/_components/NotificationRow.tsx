@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -8,6 +10,7 @@ import {
   ShieldCheck,
   Store,
   Wallet,
+  X,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -18,7 +21,9 @@ import {
   notificationBody,
   notificationTitle,
 } from "@/lib/notifications";
+import { archiveNotification } from "@/lib/services/notifications";
 import { cn } from "@/lib/utils";
+import { useNotificationStore } from "@/store/notificationStore";
 import type { Notification, NotificationType } from "@/types";
 
 interface NotificationRowProps {
@@ -59,6 +64,17 @@ export function NotificationRow({ notification }: NotificationRowProps) {
   const title = notificationTitle(notification);
   const body = notificationBody(notification);
 
+  function handleArchive(e: React.MouseEvent<HTMLButtonElement>) {
+    // Stop the click bubbling to the wrapping <Link> so we don't navigate
+    // when the user just wanted to dismiss the row.
+    e.preventDefault();
+    e.stopPropagation();
+    useNotificationStore.getState().remove(notification.id);
+    void archiveNotification(notification.id).catch(() => {
+      // Best-effort. If backend fails, the row reappears on next list fetch.
+    });
+  }
+
   const inner = (
     <div
       className={cn(
@@ -95,12 +111,23 @@ export function NotificationRow({ notification }: NotificationRowProps) {
           </Typography>
         )}
       </div>
-      {!notification.read && (
-        <span
-          aria-label="Unread"
-          className="mt-2 size-2 shrink-0 rounded-full bg-primary"
-        />
-      )}
+      <div className="flex flex-col items-end gap-1.5">
+        {!notification.read && (
+          <span
+            aria-label="Unread"
+            className="size-2 shrink-0 rounded-full bg-primary"
+          />
+        )}
+        <button
+          type="button"
+          onClick={handleArchive}
+          aria-label="Dismiss notification"
+          title="Dismiss"
+          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground opacity-60 transition-all hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 
