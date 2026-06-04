@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/Input";
 import { Textarea } from "@/components/Textarea";
 import { Typography } from "@/components/Typography";
-import { apiClient, extractApiError } from "@/lib/api";
+import { apiClient } from "@/lib/api";
 import { useSellerShopStore } from "@/store/sellerShopStore";
 import { toast } from "@/store/toastStore";
 import type { Shop } from "@/types";
@@ -60,10 +60,7 @@ export function ShopForm({ shop }: ShopFormProps) {
         "Your changes are live on your storefront."
       );
     } catch (err) {
-      toast.error(
-        "Couldn't save shop",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't save shop", err);
     } finally {
       setSaving(false);
     }

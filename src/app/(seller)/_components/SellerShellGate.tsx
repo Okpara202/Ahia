@@ -11,7 +11,6 @@ import { PageLoader } from "@/components/PageLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import { getMyShop, reopenShop } from "@/lib/services/seller";
 import { useAuthStore } from "@/store/authStore";
 import { useSellerShopStore } from "@/store/sellerShopStore";
@@ -126,10 +125,7 @@ function PausedShopState({ shop }: { shop: Shop }) {
         "Your shop is live again. Buyers can find you in the feed."
       );
     } catch (err) {
-      toast.error(
-        "Couldn't reopen your shop",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't reopen your shop", err);
       setWorking(false);
     }
   }

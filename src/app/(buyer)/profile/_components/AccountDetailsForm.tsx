@@ -43,7 +43,8 @@ export function AccountDetailsForm({ user }: AccountDetailsFormProps) {
       } else {
         toast.error(
           "Couldn't save profile",
-          apiErr?.message ?? "Try again in a moment."
+          apiErr?.message ?? "Try again in a moment.",
+          apiErr?.requestId
         );
       }
     } finally {

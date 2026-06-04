@@ -18,7 +18,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { extractApiError } from "@/lib/api";
 import { deleteShop, pauseShop } from "@/lib/services/seller";
 import { useAuthStore } from "@/store/authStore";
 import { useSellerShopStore } from "@/store/sellerShopStore";
@@ -75,10 +74,7 @@ export function DeleteShopButton() {
       setOpen(false);
       router.push("/seller");
     } catch (err) {
-      toast.error(
-        "Couldn't pause your shop",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't pause your shop", err);
       setPausing(false);
     }
   }
@@ -102,10 +98,7 @@ export function DeleteShopButton() {
       setOpen(false);
       router.push("/feed");
     } catch (err) {
-      toast.error(
-        "Couldn't delete your shop",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't delete your shop", err);
       setDeleting(false);
     }
   }

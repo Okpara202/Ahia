@@ -74,10 +74,7 @@ export function OnboardingForm() {
         error: err,
         apiErr: extractApiError(err),
       });
-      toast.error(
-        "Couldn't save your role",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't save your role", err);
       setSubmitting(false);
     }
   }

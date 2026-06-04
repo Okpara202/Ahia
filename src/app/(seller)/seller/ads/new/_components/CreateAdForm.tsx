@@ -9,7 +9,6 @@ import { BoostPlanList } from "@/app/(seller)/seller/products/_components/BoostP
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/Textarea";
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import {
   purchaseDiscoverCampaign,
   uploadDiscoverPost,
@@ -143,10 +142,7 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
       // and the return URL drops the seller back at the analytics page.
       window.location.href = authorization_url;
     } catch (err) {
-      toast.error(
-        "Couldn't create the ad",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't create the ad", err);
       setSubmitting(false);
       router.refresh();
     }

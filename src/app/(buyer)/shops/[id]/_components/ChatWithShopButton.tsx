@@ -43,7 +43,8 @@ export function ChatWithShopButton({
       router.push(`/inbox/${conversationId}`);
     } catch (err) {
       console.warn("[chat-with-shop] failed", err);
-      const code = extractApiError(err)?.code;
+      const apiErr = extractApiError(err);
+      const code = apiErr?.code;
       if (code === "shop_paused" || code === "shop_gone") {
         toast.error(
           "This seller is on a break",
@@ -52,7 +53,11 @@ export function ChatWithShopButton({
       } else if (code === "self_conversation") {
         toast.error("That's your own shop", "You can't message yourself.");
       } else {
-        toast.error("Couldn't open chat", "Try again in a moment.");
+        toast.error(
+          "Couldn't open chat",
+          apiErr?.message ?? "Try again in a moment.",
+          apiErr?.requestId
+        );
       }
       setOpening(false);
     }

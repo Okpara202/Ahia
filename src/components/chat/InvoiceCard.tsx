@@ -17,7 +17,6 @@ import {
 
 import { Typography } from "@/components/Typography";
 import { Button } from "@/components/ui/button";
-import { extractApiError } from "@/lib/api";
 import {
   cancelInvoice,
   confirmInvoiceLine,
@@ -109,11 +108,7 @@ export function InvoiceCard({ message, isBuyer, mine }: InvoiceCardProps) {
       window.location.href = authorizationUrl;
     } catch (err) {
       setPaying(false);
-      const apiErr = extractApiError(err);
-      toast.error(
-        "Couldn't start payment",
-        apiErr?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't start payment", err);
     }
   }
 
@@ -144,11 +139,7 @@ export function InvoiceCard({ message, isBuyer, mine }: InvoiceCardProps) {
       });
       toast.success("Invoice cancelled", "");
     } catch (err) {
-      const apiErr = extractApiError(err);
-      toast.error(
-        "Couldn't cancel",
-        apiErr?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't cancel", err);
     } finally {
       setCancelling(false);
     }
@@ -168,11 +159,7 @@ export function InvoiceCard({ message, isBuyer, mine }: InvoiceCardProps) {
         `Funds for "${line.name}" are on their way.`
       );
     } catch (err) {
-      const apiErr = extractApiError(err);
-      toast.error(
-        "Couldn't release",
-        apiErr?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't release", err);
     } finally {
       setResolvingLineId(null);
     }

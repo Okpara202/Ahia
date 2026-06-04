@@ -852,6 +852,45 @@ When the migration ships:
 4. Tighten backend CORS to single allowlist entry (`https://app.ahia.ng`)
 5. Flip backend cookie to `SameSite=Lax; Domain=.ahia.ng`
 
+### Backend `X-Request-Id` + `toast.fromApiError` helper (2026-06-04)
+
+Every backend response now carries an `X-Request-Id` header, and 5xx response bodies also include `error.requestId`. Surfacing this in the UI makes bug reports 10× easier — backend greps their logs for the ID instead of guessing what request the user hit.
+
+**The pattern:** any error toast that came from a backend response should forward `requestId` to the toast. Two ways to do it:
+
+**Preferred — `toast.fromApiError(title, err, fallback?)`** (in [src/store/toastStore.ts](src/store/toastStore.ts)):
+
+```tsx
+} catch (err) {
+  toast.fromApiError("Couldn't save", err, "Try again in a moment.");
+}
+```
+
+This auto-extracts `apiErr.message` (with the fallback) **and** `apiErr.requestId` from the error. Use it whenever you don't need to branch on `apiErr.code` or `apiErr.fields`.
+
+**Fallback — `toast.error(title, description, requestId)`**:
+
+When you DO need to branch on the error code or read `apiErr.fields`, keep the explicit shape and pass `apiErr?.requestId` as the third arg:
+
+```tsx
+} catch (err) {
+  const apiErr = extractApiError(err);
+  if (apiErr?.fields) {
+    setFieldErrors(apiErr.fields);
+  } else {
+    toast.error(
+      "Couldn't sign in",
+      apiErr?.message ?? "Check your password.",
+      apiErr?.requestId
+    );
+  }
+}
+```
+
+The requestId renders as small muted monospace text under the description (`ID: a3f9e2b1c8d0`), with `select-all` so the user can copy it for a bug report.
+
+`extractApiError` also falls back to reading the `x-request-id` response header when the body doesn't carry one — so even 4xx errors get a request ID surfaced when present.
+
 ---
 
 ## 12. Project Folder Structure
@@ -1154,3 +1193,4 @@ PLATFORM_FEE_PERCENT=          # e.g. 5
 - **Match backend field names exactly** in frontend types — no mapping layer. Renames are search-and-replace. Convention: camelCase ISO timestamps (`createdAt`, `updatedAt`), `*Url` suffix for media URLs (`avatarUrl`, `bannerUrl`, `imageUrl`). See §11c.
 - **`role` is the visibility switch, not a permission gate.** A seller can browse as a buyer via the client-side `activeRole` without changing `user.role`. Flipping `user.role` to "buyer" hides the shop from feed/search but never deletes it. See §11c.
 - Use `toast.confirm()` (center) only for identity-level events. Everything else is corner placement. See §11c.
+- **Prefer `toast.fromApiError(title, err, fallback?)` in catch blocks** over hand-rolled `toast.error("X", extractApiError(err)?.message)`. It forwards the backend's `X-Request-Id` to the toast UI, which makes bug reports actionable. When you must branch on `apiErr.code` or `apiErr.fields`, pass `apiErr?.requestId` as the third arg to `toast.error`. See §11c.

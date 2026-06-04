@@ -19,20 +19,35 @@ const BASE_URL = (() => {
 
 /**
  * Backend error response shape. Every 4xx/5xx response is guaranteed to be:
- * `{ error: { code, message, fields? } }` per BACKEND_HANDOFF.md §3.
+ * `{ error: { code, message, fields?, requestId? } }` per BACKEND_HANDOFF.md §3.
+ *
+ * `requestId` lands on 5xx responses (and is also available as the
+ * `X-Request-Id` response header on every response). Surface it on generic
+ * 500 toasts — bug reports with this ID let the backend grep their logs
+ * for the exact request.
  */
 export interface ApiError {
   code: string;
   message: string;
   fields?: Record<string, string>;
+  requestId?: string;
 }
 
 /** Pull the structured error out of an Axios error. Returns null if not a
- *  backend-shaped response (e.g. network error, abort, CORS). */
+ *  backend-shaped response (e.g. network error, abort, CORS). Falls back to
+ *  the `X-Request-Id` response header when the body doesn't carry one. */
 export function extractApiError(err: unknown): ApiError | null {
   if (axios.isAxiosError(err)) {
-    const payload = (err as AxiosError<{ error?: ApiError }>).response?.data;
-    if (payload?.error) return payload.error;
+    const response = (err as AxiosError<{ error?: ApiError }>).response;
+    const payload = response?.data;
+    if (payload?.error) {
+      if (!payload.error.requestId) {
+        const headerId = response?.headers?.["x-request-id"];
+        if (typeof headerId === "string" && headerId)
+          return { ...payload.error, requestId: headerId };
+      }
+      return payload.error;
+    }
   }
   return null;
 }

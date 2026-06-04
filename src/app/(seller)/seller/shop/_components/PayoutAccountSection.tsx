@@ -131,10 +131,7 @@ export function PayoutAccountSection() {
         "We'll deposit your sales here every morning."
       );
     } catch (err) {
-      toast.error(
-        "Couldn't save",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't save", err);
     } finally {
       setSaving(false);
     }
@@ -152,10 +149,7 @@ export function PayoutAccountSection() {
       );
       toast.info("Payout account removed", "Add a new one to receive payouts.");
     } catch (err) {
-      toast.error(
-        "Couldn't remove",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't remove", err);
     }
   }
 

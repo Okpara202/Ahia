@@ -132,7 +132,8 @@ export function ProductForm({ initial, mode }: ProductFormProps) {
       } else {
         toast.error(
           mode === "edit" ? "Couldn't save changes" : "Couldn't publish",
-          apiErr?.message ?? "Try again in a moment."
+          apiErr?.message ?? "Try again in a moment.",
+          apiErr?.requestId
         );
       }
       setSaving(false);

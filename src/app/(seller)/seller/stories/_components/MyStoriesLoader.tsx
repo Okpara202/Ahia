@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/PageLoader";
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import { deleteStory, getMyStories } from "@/lib/services/stories";
 import { toast } from "@/store/toastStore";
 import type { Story } from "@/types";
@@ -58,10 +57,7 @@ export function MyStoriesLoader() {
       setStories((prev) => (prev ? prev.filter((s) => s.id !== storyId) : prev));
       toast.success("Story removed", "Buyers will no longer see this one.");
     } catch (err) {
-      toast.error(
-        "Couldn't delete",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't delete", err);
     } finally {
       setDeletingId(null);
     }

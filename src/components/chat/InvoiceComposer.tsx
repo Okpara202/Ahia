@@ -23,7 +23,6 @@ import { Input } from "@/components/Input";
 import { Portal } from "@/components/Portal";
 import { Typography } from "@/components/Typography";
 import { Button } from "@/components/ui/button";
-import { extractApiError } from "@/lib/api";
 import { sendInvoiceMessage } from "@/lib/services/conversations";
 import type { InvoiceLineDraft } from "@/lib/services/conversations";
 import { getMyProducts } from "@/lib/services/seller";
@@ -248,11 +247,10 @@ export function InvoiceComposer({
       onSent(message);
       onClose();
     } catch (err) {
-      const apiErr = extractApiError(err);
-      toast.error(
+      toast.fromApiError(
         "Couldn't send invoice",
-        apiErr?.message ??
-          "Backend may not have shipped invoice endpoints yet — see FRONTEND_ASK_invoice.md."
+        err,
+        "Backend may not have shipped invoice endpoints yet — see FRONTEND_ASK_invoice.md."
       );
     } finally {
       setSending(false);

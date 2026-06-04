@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 
-import { apiClient, extractApiError } from "@/lib/api";
+import { apiClient } from "@/lib/api";
 import { Typography } from "@/components/Typography";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "@/store/toastStore";
@@ -41,10 +41,7 @@ export function ColdDMPreference() {
     } catch (err) {
       // Roll back on failure.
       setEnabled(!next);
-      toast.error(
-        "Couldn't save",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't save", err);
     } finally {
       setSaving(false);
     }

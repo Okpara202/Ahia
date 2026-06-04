@@ -58,7 +58,8 @@ export function SignupForm() {
       } else {
         toast.error(
           "Couldn't create account",
-          apiErr?.message ?? "Try again, or sign up with Google."
+          apiErr?.message ?? "Try again, or sign up with Google.",
+          apiErr?.requestId
         );
       }
       setSubmitting(false);

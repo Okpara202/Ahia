@@ -16,7 +16,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import {
   deleteProduct,
@@ -86,10 +85,7 @@ export function ProductGridCard({
       );
     } catch (err) {
       setHidden(!next);
-      toast.error(
-        "Couldn't update visibility",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't update visibility", err);
     }
   }
 
@@ -100,10 +96,7 @@ export function ProductGridCard({
       onDelete?.(product.id);
       toast.success("Product deleted");
     } catch (err) {
-      toast.error(
-        "Couldn't delete product",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't delete product", err);
     }
   }
 

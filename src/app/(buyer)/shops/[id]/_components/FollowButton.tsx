@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Check, Heart, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { extractApiError } from "@/lib/api";
 import { followShop, unfollowShop } from "@/lib/services/shops";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "@/store/toastStore";
@@ -59,9 +58,9 @@ export function FollowButton({
     } catch (err) {
       // Revert on failure.
       setFollowing(wasFollowing);
-      toast.error(
+      toast.fromApiError(
         wasFollowing ? "Couldn't unfollow" : "Couldn't follow",
-        extractApiError(err)?.message ?? "Try again in a moment."
+        err
       );
     } finally {
       setWorking(false);

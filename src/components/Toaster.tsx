@@ -99,6 +99,14 @@ function CornerToast({ toast }: { toast: Toast }) {
             {toast.description}
           </Typography>
         )}
+        {toast.requestId && (
+          <Typography
+            variant="caption"
+            className="mt-0.5 font-mono text-[11px] text-muted-foreground/70 select-all"
+          >
+            ID: {toast.requestId}
+          </Typography>
+        )}
       </div>
       <button
         type="button"

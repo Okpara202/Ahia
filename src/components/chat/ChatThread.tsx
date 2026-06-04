@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { extractApiError } from "@/lib/api";
 import {
   markConversationRead as serverMarkConversationRead,
   sendImageMessage,
@@ -140,10 +139,7 @@ export function ChatThread({
       replaceMessage(conversation.id, tempId, persisted);
     } catch (err) {
       removeMessage(conversation.id, tempId);
-      toast.error(
-        "Couldn't send message",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't send message", err);
     }
   }
 
@@ -167,10 +163,7 @@ export function ChatThread({
       replaceMessage(conversation.id, tempId, persisted);
     } catch (err) {
       removeMessage(conversation.id, tempId);
-      toast.error(
-        "Couldn't send image",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't send image", err);
     } finally {
       URL.revokeObjectURL(previewUrl);
     }
@@ -200,10 +193,7 @@ export function ChatThread({
       replaceMessage(conversation.id, tempId, persisted);
     } catch (err) {
       removeMessage(conversation.id, tempId);
-      toast.error(
-        "Couldn't send voice note",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't send voice note", err);
     } finally {
       URL.revokeObjectURL(previewUrl);
     }

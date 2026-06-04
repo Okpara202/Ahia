@@ -195,7 +195,8 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
       } else {
         toast.error(
           "Couldn't open your shop",
-          apiErr?.message ?? "Try again in a moment."
+          apiErr?.message ?? "Try again in a moment.",
+          apiErr?.requestId
         );
       }
       setSubmitting(false);

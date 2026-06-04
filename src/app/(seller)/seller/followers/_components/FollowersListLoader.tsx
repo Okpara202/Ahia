@@ -78,7 +78,8 @@ export function FollowersListLoader() {
       } else {
         toast.error(
           "Couldn't open chat",
-          apiErr?.message ?? "Try again in a moment."
+          apiErr?.message ?? "Try again in a moment.",
+          apiErr?.requestId
         );
       }
       setMessagingUserId(null);

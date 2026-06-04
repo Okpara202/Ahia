@@ -41,7 +41,8 @@ export function LoginForm() {
       } else {
         toast.error(
           "Couldn't sign in",
-          apiErr?.message ?? "Check your email and password, or try Google."
+          apiErr?.message ?? "Check your email and password, or try Google.",
+          apiErr?.requestId
         );
       }
       setSubmitting(false);

@@ -102,7 +102,8 @@ export function ExtendLineDialog({
       } else {
         toast.error(
           "Couldn't extend",
-          apiErr?.message ?? "Try again in a moment."
+          apiErr?.message ?? "Try again in a moment.",
+          apiErr?.requestId
         );
       }
     } finally {

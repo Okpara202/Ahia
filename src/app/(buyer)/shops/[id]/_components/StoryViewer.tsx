@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronLeft, ChevronRight, Loader2, Send, X } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import { startConversation } from "@/lib/actions/conversations";
 import { formatRelativeTime } from "@/lib/format";
 import { sendTextMessage } from "@/lib/services/conversations";
@@ -106,10 +105,7 @@ export function StoryViewer({
       onClose();
       router.push(`/inbox/${conversationId}`);
     } catch (err) {
-      toast.error(
-        "Couldn't send",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't send", err);
       setSending(false);
     }
   }

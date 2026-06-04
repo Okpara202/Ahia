@@ -5,7 +5,6 @@ import { ShieldCheck, X, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import { buyBoost } from "@/lib/actions/boosts";
 import { BOOST_PLANS } from "@/lib/mocks/boosts";
 import { formatNaira } from "@/lib/format";
@@ -53,10 +52,7 @@ export function BoostSheet({ product, open, onClose }: BoostSheetProps) {
       });
       window.location.href = authorization_url;
     } catch (err) {
-      toast.error(
-        "Couldn't open Paystack",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't open Paystack", err);
       setSubmitting(false);
     }
   }

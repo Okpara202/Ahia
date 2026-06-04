@@ -19,7 +19,6 @@ import {
 import { Portal } from "@/components/Portal";
 import { Typography } from "@/components/Typography";
 import { Button } from "@/components/ui/button";
-import { extractApiError } from "@/lib/api";
 import { disputeInvoiceLine } from "@/lib/services/conversations";
 import { compressImageIfNeeded, formatBytes } from "@/lib/image";
 import { toast } from "@/store/toastStore";
@@ -138,11 +137,7 @@ export function DisputeLineDialog({
         "An admin will review and decide within 48 hours."
       );
     } catch (err) {
-      const apiErr = extractApiError(err);
-      toast.error(
-        "Couldn't open dispute",
-        apiErr?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't open dispute", err);
     } finally {
       setSubmitting(false);
     }

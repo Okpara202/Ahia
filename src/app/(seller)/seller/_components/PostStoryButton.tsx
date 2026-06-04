@@ -8,7 +8,6 @@ import { Check, Loader2, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/Input";
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import { compressImageIfNeeded, formatBytes } from "@/lib/image";
 import { createStory } from "@/lib/services/stories";
 import { cn } from "@/lib/utils";
@@ -124,10 +123,7 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
       toast.success("Story posted", "It expires in 24 hours.");
       router.refresh();
     } catch (err) {
-      toast.error(
-        "Couldn't post",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't post", err);
       setSubmitting(false);
     }
   }

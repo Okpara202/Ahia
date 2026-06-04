@@ -16,7 +16,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Typography } from "@/components/Typography";
-import { extractApiError } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import {
   cashOutNow,
@@ -67,10 +66,7 @@ export function OwedBalanceCard({
       setPreview(p);
       setDialogOpen(true);
     } catch (err) {
-      toast.error(
-        "Couldn't load cash-out details",
-        extractApiError(err)?.message ?? "Try again in a moment."
-      );
+      toast.fromApiError("Couldn't load cash-out details", err);
     } finally {
       setLoadingPreview(false);
     }
@@ -93,11 +89,10 @@ export function OwedBalanceCard({
       setDialogOpen(false);
       onPaid();
     } catch (err) {
-      const apiErr = extractApiError(err);
-      toast.error(
+      toast.fromApiError(
         "Cash out didn't go through",
-        apiErr?.message ??
-          "Your balance is untouched. Try again in a moment."
+        err,
+        "Your balance is untouched. Try again in a moment."
       );
     } finally {
       setCashingOut(false);
