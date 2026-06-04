@@ -10,6 +10,11 @@ import { useAuthStore } from "@/store/authStore";
 import { OwedBalanceCard } from "./OwedBalanceCard";
 import { PayoutHistoryList } from "./PayoutHistoryList";
 
+interface LoadedPage {
+  items: PayoutRow[];
+  owedBalance: string;
+}
+
 /**
  * `/seller/payouts` — Phase 7 surface. Shows:
  * - Pending payout (owedBalance) card with Cash out now button at the top
@@ -21,25 +26,35 @@ import { PayoutHistoryList } from "./PayoutHistoryList";
  */
 export function PayoutsLoader() {
   const user = useAuthStore((s) => s.user);
-  const [payouts, setPayouts] = useState<PayoutRow[] | null>(null);
+  const [page, setPage] = useState<LoadedPage | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     getMyPayouts()
-      .then((page) => {
+      .then((p) => {
         if (cancelled) return;
-        setPayouts(page.items);
+        setPage({ items: p.items, owedBalance: p.owedBalance });
+        // Backend echoes the live owedBalance — keep auth store in sync so
+        // dashboards/banners stay accurate without an extra /auth/me hit.
+        if (user) {
+          useAuthStore.setState((s) =>
+            s.user ? { user: { ...s.user, owedBalance: p.owedBalance } } : {}
+          );
+        }
       })
       .catch(() => {
         if (cancelled) return;
-        setPayouts([]);
+        setPage({ items: [], owedBalance: user?.owedBalance ?? "0" });
       });
     return () => {
       cancelled = true;
     };
+    // user only read once at first mount; refetch flow uses the closure
+    // re-bound inside the onPaid callback below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (payouts === null) {
+  if (page === null) {
     return <PageLoader fullScreen={false} label="Loading payouts…" />;
   }
 
@@ -57,19 +72,26 @@ export function PayoutsLoader() {
       </header>
 
       <OwedBalanceCard
-        owedBalance={user?.owedBalance ?? "0"}
+        owedBalance={page.owedBalance}
         hasPayoutAccount={user?.hasPayoutAccount ?? false}
         onPaid={() => {
-          // Refetch the list so the new instant payout appears on top.
+          // Refetch so the new cash-out row appears on top + owedBalance
+          // reflects the post-payout zero.
           getMyPayouts()
-            .then((page) => setPayouts(page.items))
+            .then((p) =>
+              setPage({ items: p.items, owedBalance: p.owedBalance })
+            )
             .catch(() => undefined);
         }}
       />
 
       <section className="flex flex-col gap-3">
         <Typography variant="heading-h3">History</Typography>
-        {payouts.length === 0 ? <HistoryEmpty /> : <PayoutHistoryList payouts={payouts} />}
+        {page.items.length === 0 ? (
+          <HistoryEmpty />
+        ) : (
+          <PayoutHistoryList payouts={page.items} />
+        )}
       </section>
     </div>
   );

@@ -32,7 +32,11 @@ export default async function ShopPage({ params }: ShopPageProps) {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <ShopHeader shop={shop} productCount={products.length} />
 
-      <StoriesStrip stories={stories} shopName={shop.name} />
+      <StoriesStrip
+        stories={stories}
+        shopName={shop.name}
+        sellerId={shop.ownerId}
+      />
 
       <section className="flex flex-col gap-4">
         <Typography variant="heading-h2">All products</Typography>

@@ -1,8 +1,5 @@
-import {
-  MOCK_DISCOVER_CAMPAIGNS,
-  MOCK_DISCOVER_POSTS,
-  dailyStatsFor,
-} from "@/lib/mocks/discover";
+import axios from "axios";
+
 import { apiClient, getApi } from "@/lib/api";
 import type {
   BoostPlanId,
@@ -13,7 +10,6 @@ import type {
   FeedPage,
 } from "@/types";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const PAGE_SIZE = 12;
 
 interface GetDiscoverParams {
@@ -57,32 +53,60 @@ export async function getDiscoverFeed({
   };
 }
 
+/** Current seller's Discover campaigns. Phase 7 live endpoint. Backend
+ *  infers the shop from the session cookie; the `shopId` param the
+ *  existing callers pass is ignored here but kept for backwards-compat. */
 export async function getMyDiscoverCampaigns(
-  shopId: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _shopId: string
 ): Promise<Array<DiscoverAdCampaign & { post: DiscoverPost }>> {
-  await delay(250);
-  return MOCK_DISCOVER_CAMPAIGNS.filter((c) => c.shopId === shopId)
-    .sort(
-      (a, b) =>
-        new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()
-    )
-    .map((c) => ({
-      ...c,
-      post: MOCK_DISCOVER_POSTS.find((p) => p.id === c.postId)!,
-    }));
+  const api = await getApi();
+  try {
+    const { data } = await api.get<{
+      items?: Array<DiscoverAdCampaign & { post: DiscoverPost }>;
+      campaigns?: Array<DiscoverAdCampaign & { post: DiscoverPost }>;
+    }>("/discover/campaigns/me");
+    return data.items ?? data.campaigns ?? [];
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return [];
+    throw err;
+  }
 }
 
+/** Per-campaign analytics for the `/seller/ads/[id]` page. */
 export async function getDiscoverAdAnalytics(campaignId: string): Promise<{
   campaign: DiscoverAdCampaign;
   post: DiscoverPost;
   daily: DailyAdStat[];
 } | null> {
-  await delay(250);
-  const campaign = MOCK_DISCOVER_CAMPAIGNS.find((c) => c.id === campaignId);
-  if (!campaign) return null;
-  const post = MOCK_DISCOVER_POSTS.find((p) => p.id === campaign.postId);
-  if (!post) return null;
-  return { campaign, post, daily: dailyStatsFor(campaignId) };
+  const api = await getApi();
+  try {
+    const { data } = await api.get<{
+      campaign: DiscoverAdCampaign;
+      post: DiscoverPost;
+      daily: DailyAdStat[];
+    }>(`/discover/campaigns/${campaignId}/analytics`);
+    return data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Fire-and-forget impression beacon — called as a DiscoverItem comes
+ *  into view. Errors swallowed; this is telemetry, not a critical path. */
+export function recordDiscoverImpression(postId: string): void {
+  apiClient()
+    .post(`/discover/posts/${postId}/impression`)
+    .catch(() => undefined);
+}
+
+/** Fire-and-forget click beacon — called when the user taps the CTA on
+ *  a DiscoverItem. */
+export function recordDiscoverClick(postId: string): void {
+  apiClient()
+    .post(`/discover/posts/${postId}/click`)
+    .catch(() => undefined);
 }
 
 interface UploadDiscoverPostArgs {

@@ -115,7 +115,11 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
     if (!file) return;
     setSubmitting(true);
     try {
-      await createStory({ file, caption: caption.trim() || undefined });
+      await createStory({
+        file,
+        isVideo,
+        caption: caption.trim() || undefined,
+      });
       setPosted(true);
       toast.success("Story posted", "It expires in 24 hours.");
       router.refresh();

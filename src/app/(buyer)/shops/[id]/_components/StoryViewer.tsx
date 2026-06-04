@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, ChevronLeft, ChevronRight, Loader2, Send, X } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
+import { extractApiError } from "@/lib/api";
+import { startConversation } from "@/lib/actions/conversations";
 import { formatRelativeTime } from "@/lib/format";
+import { sendTextMessage } from "@/lib/services/conversations";
+import { recordStoryView } from "@/lib/services/stories";
+import { useAuthStore } from "@/store/authStore";
+import { toast } from "@/store/toastStore";
 import { cn } from "@/lib/utils";
 import type { Story } from "@/types";
 
@@ -16,6 +23,9 @@ interface StoryViewerProps {
   stories: Story[];
   initialIndex: number;
   shopName: string;
+  /** When provided, render the "reply to story" input at the bottom.
+   *  Omitted for guest viewers (login-gated chat). */
+  sellerId?: string;
   onClose: () => void;
 }
 
@@ -23,12 +33,27 @@ export function StoryViewer({
   stories,
   initialIndex,
   shopName,
+  sellerId,
   onClose,
 }: StoryViewerProps) {
+  const router = useRouter();
   const [index, setIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const user = useAuthStore((s) => s.user);
 
   const story = stories[index];
+
+  // Dedupe view beacons across the lifetime of this viewer mount. Each
+  // story id fires once even if the user navigates back and forth.
+  const viewedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!story?.id) return;
+    if (viewedRef.current.has(story.id)) return;
+    viewedRef.current.add(story.id);
+    recordStoryView(story.id);
+  }, [story?.id]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -64,8 +89,34 @@ export function StoryViewer({
     };
   }, [stories.length, onClose]);
 
+  async function handleReply() {
+    if (!sellerId || !reply.trim() || sending || !story) return;
+    if (!user) {
+      router.push(`/login?next=/shops/${story.shopId}`);
+      return;
+    }
+    setSending(true);
+    try {
+      const { conversationId } = await startConversation({ sellerId });
+      await sendTextMessage(conversationId, reply.trim(), {
+        storyId: story.id,
+      });
+      setReply("");
+      toast.success("Reply sent", "Continuing in your inbox.");
+      onClose();
+      router.push(`/inbox/${conversationId}`);
+    } catch (err) {
+      toast.error(
+        "Couldn't send",
+        extractApiError(err)?.message ?? "Try again in a moment."
+      );
+      setSending(false);
+    }
+  }
+
   if (!story || !story.media) return null;
   const isVideo = story.media.type === "video";
+  const canReply = Boolean(sellerId);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black animate-in fade-in duration-200">
@@ -173,6 +224,39 @@ export function StoryViewer({
           <Typography variant="body-md" className="max-w-2xl">
             {story.caption}
           </Typography>
+        )}
+        {canReply && (
+          <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 backdrop-blur">
+            <input
+              type="text"
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleReply();
+                }
+              }}
+              placeholder={`Reply to ${shopName}…`}
+              aria-label="Reply to story"
+              maxLength={500}
+              disabled={sending}
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-white/60 disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={handleReply}
+              disabled={!reply.trim() || sending}
+              aria-label="Send reply"
+              className="grid size-8 place-items-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 disabled:opacity-40"
+            >
+              {sending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4" />
+              )}
+            </button>
+          </div>
         )}
         {story.productId && (
           <Link

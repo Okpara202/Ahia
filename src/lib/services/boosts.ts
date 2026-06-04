@@ -1,51 +1,75 @@
-import { BOOST_PLANS, MOCK_BOOSTS, getBoostPlan } from "@/lib/mocks/boosts";
+import axios from "axios";
+
+import { getApi } from "@/lib/api";
+import { BOOST_PLANS, getBoostPlan } from "@/lib/mocks/boosts";
 import type { Boost, BoostPlan } from "@/types";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Plans still live in `@/lib/mocks/boosts` as a fallback. Once we want
+// pricing changes without a frontend deploy, the BOOST_PLANS export here
+// will hydrate from the GET /boosts/plans endpoint and the local file
+// becomes the default-on-cold-start.
 
+/** Plan list. Falls back to the local seed if backend hasn't shipped
+ *  `/boosts/plans` or it's transiently unavailable. */
 export async function listBoostPlans(): Promise<BoostPlan[]> {
-  await delay(50);
-  return BOOST_PLANS;
+  const api = await getApi();
+  try {
+    const { data } = await api.get<{ plans?: BoostPlan[]; items?: BoostPlan[] }>(
+      "/boosts/plans"
+    );
+    const plans = data.plans ?? data.items ?? [];
+    return plans.length > 0 ? plans : BOOST_PLANS;
+  } catch (err) {
+    if (axios.isAxiosError(err)) return BOOST_PLANS;
+    throw err;
+  }
 }
 
-/** Boost IDs that should render as Sponsored right now. */
-export function activeBoostedProductIds(now: Date = new Date()): Set<string> {
-  const t = now.getTime();
-  return new Set(
-    MOCK_BOOSTS.filter(
-      (b) =>
-        b.active &&
-        new Date(b.startsAt).getTime() <= t &&
-        new Date(b.endsAt).getTime() >= t
-    ).map((b) => b.productId)
-  );
-}
-
+/** Active boosts for the shop the seller owns. Used by /seller/products to
+ *  badge boosted product cards. Tolerates pre-deploy 404. */
 export async function getActiveBoostsForShop(shopId: string): Promise<Boost[]> {
-  await delay(150);
-  const now = Date.now();
-  return MOCK_BOOSTS.filter(
-    (b) =>
-      b.shopId === shopId &&
-      b.active &&
-      new Date(b.endsAt).getTime() >= now
-  );
+  const api = await getApi();
+  try {
+    const { data } = await api.get<{ items?: Boost[]; boosts?: Boost[] }>(
+      `/shops/${shopId}/boosts`
+    );
+    return data.items ?? data.boosts ?? [];
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return [];
+    throw err;
+  }
 }
 
+/** Currently-active boost for one product, if any. Powers the "Sponsored"
+ *  badge on individual product detail pages. */
 export async function getActiveBoostForProduct(
   productId: string
 ): Promise<Boost | null> {
-  await delay(80);
-  const now = Date.now();
-  return (
-    MOCK_BOOSTS.find(
-      (b) =>
-        b.productId === productId &&
-        b.active &&
-        new Date(b.startsAt).getTime() <= now &&
-        new Date(b.endsAt).getTime() >= now
-    ) ?? null
-  );
+  const api = await getApi();
+  try {
+    const { data } = await api.get<{ boost: Boost | null }>(
+      `/products/${productId}/boost`
+    );
+    return data.boost ?? null;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Seller's own active boosts (across all their products). Powers the
+ *  /seller/products boost summary widget. */
+export async function getMyBoosts(): Promise<Boost[]> {
+  const api = await getApi();
+  try {
+    const { data } = await api.get<{ items?: Boost[]; boosts?: Boost[] }>(
+      "/boosts/me"
+    );
+    return data.items ?? data.boosts ?? [];
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return [];
+    throw err;
+  }
 }
 
 export { getBoostPlan };

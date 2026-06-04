@@ -41,10 +41,17 @@ export const usePresenceStore = create<PresenceState>((set) => ({
     }),
 }));
 
+/** Stable "offline" default. Must be a module-level singleton (not an
+ *  inline object literal) so the zustand selector returns the SAME
+ *  reference every call when we have no presence for this user. A fresh
+ *  object would trip Object.is identity, force a re-render, run the
+ *  selector again, return another fresh object — infinite loop. */
+const OFFLINE: PresenceEntry = { online: false, lastSeenAt: null };
+
 /** Hook variant — read-only access for a specific user with a sane default
  *  when we haven't seen any presence event for them yet. */
 export function useUserPresence(userId: string | undefined): PresenceEntry {
   return usePresenceStore((s) =>
-    userId ? s.byUserId[userId] ?? { online: false, lastSeenAt: null } : { online: false, lastSeenAt: null }
+    userId ? s.byUserId[userId] ?? OFFLINE : OFFLINE
   );
 }

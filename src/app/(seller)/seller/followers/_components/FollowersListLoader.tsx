@@ -8,6 +8,7 @@ import { MessageCircle, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/PageLoader";
 import { Typography } from "@/components/Typography";
+import { extractApiError } from "@/lib/api";
 import { startConversation } from "@/lib/actions/conversations";
 import { formatRelativeTime } from "@/lib/format";
 import { getMyFollowers, type ShopFollower } from "@/lib/services/following";
@@ -55,15 +56,31 @@ export function FollowersListLoader() {
     }
     setMessagingUserId(follower.userId);
     try {
+      // Seller-initiated path: backend's POST /conversations { buyerId }.
+      // Distinct from buyer-initiated (sellerId) — backend uses this to
+      // enforce 50/day cold-DM limit + buyer's allowsColdDMs preference.
       const { conversationId } = await startConversation({
-        sellerId: follower.userId,
+        buyerId: follower.userId,
       });
       router.push(`/seller/inbox/${conversationId}`);
-    } catch {
-      toast.error(
-        "Couldn't open chat",
-        "Try again in a moment."
-      );
+    } catch (err) {
+      const apiErr = extractApiError(err);
+      if (apiErr?.code === "cold_dm_limit") {
+        toast.error(
+          "Daily message limit hit",
+          "You can start 50 new conversations per day. Try again tomorrow."
+        );
+      } else if (apiErr?.code === "buyer_blocks_cold_dms") {
+        toast.info(
+          "This buyer hasn't opted in",
+          "They'll need to message you first."
+        );
+      } else {
+        toast.error(
+          "Couldn't open chat",
+          apiErr?.message ?? "Try again in a moment."
+        );
+      }
       setMessagingUserId(null);
     }
   }

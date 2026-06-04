@@ -305,6 +305,11 @@ interface SendOptions {
   /** WhatsApp-reply-style product attachment. Backend snapshots the product
    *  and embeds the {id, name, price, coverUrl} on the message. */
   contextProductId?: string;
+  /** "Reply to story" attachment. Backend snapshots the story's media URL,
+   *  type, poster, and caption onto the message row so the preview
+   *  survives story expiration. Only send the id — backend resolves the
+   *  rest server-side. */
+  storyId?: string;
 }
 
 export async function sendTextMessage(
@@ -314,7 +319,11 @@ export async function sendTextMessage(
 ): Promise<Message> {
   const { data } = await apiClient().post<{ message: unknown }>(
     `/conversations/${conversationId}/messages`,
-    { content, contextProductId: opts.contextProductId }
+    {
+      content,
+      contextProductId: opts.contextProductId,
+      storyId: opts.storyId,
+    }
   );
   return mapMessage(data.message);
 }
