@@ -21,10 +21,17 @@ const STATUS_FILTERS: { id: Status; label: string }[] = [
   { id: "expired", label: "Expired" },
 ];
 
+/**
+ * Prefer backend's server-computed `status` field — it has the source
+ * of truth on whether a campaign is active. Fall back to computing
+ * from expiresAt + sponsored when the field is absent (older feeds,
+ * mocks).
+ */
 function classify(
   post: DiscoverPost,
   now: number
 ): "boosted" | "organic" | "expired" {
+  if (post.status) return post.status;
   const expired = post.expiresAt
     ? new Date(post.expiresAt).getTime() < now
     : false;

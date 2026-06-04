@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   Clock,
   Gift,
+  Heart,
   Megaphone,
   ShieldCheck,
   Sparkles,
@@ -42,6 +43,7 @@ const ICON_MAP: Record<NotificationType, LucideIcon> = {
   shop_reopened: Store,
   story_posted: Sparkles,
   payout_awaiting_account: Wallet,
+  follow: Heart,
 };
 
 const TINT_MAP: Record<NotificationType, string> = {
@@ -58,6 +60,7 @@ const TINT_MAP: Record<NotificationType, string> = {
   shop_reopened: "bg-primary/10 text-primary",
   story_posted: "bg-accent/15 text-accent",
   payout_awaiting_account: "bg-accent/15 text-accent",
+  follow: "bg-primary/10 text-primary",
 };
 
 export function NotificationItem({

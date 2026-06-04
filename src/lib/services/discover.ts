@@ -17,14 +17,44 @@ interface GetDiscoverParams {
   limit?: number;
 }
 
+/**
+ * Build the nested `video` object from either the new flat
+ * `videoUrl` + `posterUrl` shape (Discover v2 endpoints) OR the older
+ * nested `video: { url, poster }` shape (the public `/discover` feed
+ * still uses this per backend's v2 deploy doc — "Response shape
+ * unchanged").
+ */
+function mapVideo(r: Record<string, unknown>): DiscoverPost["video"] {
+  const nested = r.video as DiscoverPost["video"] | undefined;
+  if (nested && typeof nested === "object" && "url" in nested) return nested;
+  return {
+    url: String(r.videoUrl ?? ""),
+    poster:
+      typeof r.posterUrl === "string" && r.posterUrl
+        ? r.posterUrl
+        : undefined,
+  };
+}
+
+/** Same dual-shape handling for the CTA discriminated union. */
+function mapCta(r: Record<string, unknown>): DiscoverPost["cta"] {
+  const nested = r.cta as DiscoverPost["cta"] | undefined;
+  if (nested && typeof nested === "object" && "type" in nested) return nested;
+  const flatType = r.ctaType === "shop" ? "shop" : "product";
+  const targetId = String(r.ctaTargetId ?? "");
+  return flatType === "product"
+    ? { type: "product", productId: targetId }
+    : { type: "shop", shopId: targetId };
+}
+
 function mapDiscoverItem(raw: unknown): DiscoverFeedItem {
   const r = raw as Record<string, unknown>;
   return {
     id: String(r.id),
     shopId: String(r.shopId ?? ""),
-    video: r.video as DiscoverPost["video"],
+    video: mapVideo(r),
     caption: (r.caption as string | undefined) ?? undefined,
-    cta: r.cta as DiscoverPost["cta"],
+    cta: mapCta(r),
     createdAt: String(r.createdAt ?? new Date().toISOString()),
     expiresAt: r.expiresAt ? String(r.expiresAt) : undefined,
     editsRemaining:
@@ -38,18 +68,30 @@ function mapDiscoverItem(raw: unknown): DiscoverFeedItem {
 
 function mapDiscoverPost(raw: unknown): DiscoverPost {
   const r = raw as Record<string, unknown>;
+  const statusRaw = r.status;
+  const status =
+    statusRaw === "organic" || statusRaw === "boosted" || statusRaw === "expired"
+      ? statusRaw
+      : undefined;
   return {
     id: String(r.id),
     shopId: String(r.shopId ?? ""),
-    video: r.video as DiscoverPost["video"],
+    video: mapVideo(r),
     caption: (r.caption as string | undefined) ?? undefined,
-    cta: r.cta as DiscoverPost["cta"],
+    cta: mapCta(r),
     createdAt: String(r.createdAt ?? new Date().toISOString()),
     expiresAt: r.expiresAt ? String(r.expiresAt) : undefined,
     sponsored:
       typeof r.sponsored === "boolean" ? r.sponsored : undefined,
     editsRemaining:
       typeof r.editsRemaining === "number" ? r.editsRemaining : undefined,
+    lastEditedAt:
+      typeof r.lastEditedAt === "string" || r.lastEditedAt === null
+        ? (r.lastEditedAt as string | null)
+        : undefined,
+    status,
+    intentFree:
+      typeof r.intentFree === "boolean" ? r.intentFree : undefined,
     impressions: Number(r.impressions ?? 0),
     clicks: Number(r.clicks ?? 0),
     saves: Number(r.saves ?? 0),
@@ -117,35 +159,25 @@ export async function getDiscoverAdAnalytics(campaignId: string): Promise<{
 }
 
 /**
- * Fetch a single Discover post by id. Used by the `/seller/ads/[id]`
- * analytics page, which now keys off post id (so free posts have a
- * landing page too — campaign id no longer required).
- *
- * Backend endpoint expected: `GET /discover/posts/:id`. We assume this
- * exists as the natural REST counterpart to the existing list endpoint
- * `GET /discover/posts/me`. If backend hasn't shipped it, we'll see a
- * 404 here and fall through to notFound() — flag it then.
+ * Fetch a single Discover post by id. Backend's v2 deploy doc doesn't
+ * list a `GET /discover/posts/:id` endpoint, so we list-and-filter
+ * against the seller's own posts. Wasteful for many-post sellers, but
+ * the list is typically <50 items — acceptable for v2. Switch to a
+ * direct GET when backend ships one.
  */
 export async function getDiscoverPostById(
   postId: string
 ): Promise<DiscoverPost | null> {
-  const api = await getApi();
-  try {
-    const { data } = await api.get<{ post: unknown }>(
-      `/discover/posts/${postId}`
-    );
-    return mapDiscoverPost(data.post);
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
-    throw err;
-  }
+  const page = await getMyDiscoverPosts({ limit: 100 });
+  return page.items.find((p) => p.id === postId) ?? null;
 }
 
 /**
- * Daily analytics keyed by post id. Returned only when the post is
- * sponsored; backend can either reuse the existing campaign-keyed
- * `/discover/campaigns/:id/analytics` (with a postId lookup) or expose
- * a new `/discover/posts/:id/analytics` — whichever they prefer.
+ * Daily analytics for a sponsored post. Backend's analytics endpoint is
+ * still campaign-keyed (`/discover/campaigns/:id/analytics`), so we
+ * look up the campaign id via `/discover/campaigns/me`, then fetch the
+ * analytics. Free / expired posts have no campaign and return null
+ * straight away.
  */
 export async function getDiscoverPostAnalytics(
   postId: string
@@ -153,17 +185,13 @@ export async function getDiscoverPostAnalytics(
   campaign: DiscoverAdCampaign | null;
   daily: DailyAdStat[];
 } | null> {
-  const api = await getApi();
-  try {
-    const { data } = await api.get<{
-      campaign: DiscoverAdCampaign | null;
-      daily: DailyAdStat[];
-    }>(`/discover/posts/${postId}/analytics`);
-    return data;
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
-    throw err;
-  }
+  // `_shopId` is ignored by backend — kept for backwards-compat signature.
+  const campaigns = await getMyDiscoverCampaigns("");
+  const campaignWithPost = campaigns.find((c) => c.postId === postId);
+  if (!campaignWithPost) return null;
+  const data = await getDiscoverAdAnalytics(campaignWithPost.id);
+  if (!data) return null;
+  return { campaign: data.campaign, daily: data.daily };
 }
 
 /** Fire-and-forget impression beacon — called as a DiscoverItem comes

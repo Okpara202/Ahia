@@ -50,23 +50,25 @@ export default async function AdAnalyticsPage({ params }: AdAnalyticsPageProps) 
   const post = await getDiscoverPostById(id);
   if (!post) notFound();
 
-  const analytics = post.sponsored
-    ? await getDiscoverPostAnalytics(id)
-    : null;
-  const campaign = analytics?.campaign ?? null;
-  const daily = analytics?.daily ?? [];
-
-  // Server component renders at request time — clock read is intentional.
+  // Prefer backend's server-computed status; fall back to local
+  // computation if the field's absent (e.g. mocks or older endpoints).
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const expiresTs = post.expiresAt ? new Date(post.expiresAt).getTime() : null;
-  const expired = expiresTs !== null && expiresTs < now;
+  const localExpired = expiresTs !== null && expiresTs < now;
+  const lifecycle: "organic" | "boosted" | "expired" =
+    post.status ??
+    (localExpired ? "expired" : post.sponsored ? "boosted" : "organic");
+  const sponsored = lifecycle === "boosted";
+  const expired = lifecycle === "expired";
   const daysLeft =
     expiresTs !== null
       ? Math.max(0, Math.round((expiresTs - now) / (1000 * 60 * 60 * 24)))
       : null;
 
-  const sponsored = !!post.sponsored && !expired;
+  const analytics = sponsored ? await getDiscoverPostAnalytics(id) : null;
+  const campaign = analytics?.campaign ?? null;
+  const daily = analytics?.daily ?? [];
 
   const ctr =
     post.impressions > 0
