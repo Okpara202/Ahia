@@ -4,12 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronLeft, ChevronRight, Loader2, Send, X } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Mic,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { Typography } from "@/components/Typography";
+import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { startConversation } from "@/lib/actions/conversations";
 import { formatRelativeTime } from "@/lib/format";
-import { sendTextMessage } from "@/lib/services/conversations";
+import {
+  sendTextMessage,
+  sendVoiceMessage,
+} from "@/lib/services/conversations";
 import { recordStoryView } from "@/lib/services/stories";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "@/store/toastStore";
@@ -17,6 +30,7 @@ import { cn } from "@/lib/utils";
 import type { Story } from "@/types";
 
 const STORY_DURATION_MS = 6000;
+const MAX_VOICE_MS = 3 * 60 * 1000;
 
 interface StoryViewerProps {
   stories: Story[];
@@ -40,7 +54,19 @@ export function StoryViewer({
   const [progress, setProgress] = useState(0);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const user = useAuthStore((s) => s.user);
+
+  const recorder = useVoiceRecorder();
+  const isRecording =
+    recorder.state.kind === "recording" || recorder.state.kind === "starting";
+  const recordingMs =
+    recorder.state.kind === "recording" ? recorder.state.durationMs : 0;
+
+  // Pause progress while the buyer is actively engaging with the reply
+  // composer — typing, recording, or mid-send. Resume the moment they
+  // back off so the story continues like Instagram/WhatsApp do.
+  const paused = inputFocused || isRecording || sending;
 
   const story = stories[index];
 
@@ -54,13 +80,24 @@ export function StoryViewer({
     recordStoryView(story.id);
   }, [story?.id]);
 
+  // elapsedRef preserves how far through the current story we were at the
+  // moment of pause so resume picks up exactly where it left off, not
+  // from zero.
+  const elapsedRef = useRef(0);
   useEffect(() => {
+    elapsedRef.current = 0;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setProgress(0);
-    const started = Date.now();
+  }, [index]);
+
+  useEffect(() => {
+    if (paused) return;
+    const startedAt = Date.now();
+    const baseElapsed = elapsedRef.current;
     const id = window.setInterval(() => {
-      const elapsed = Date.now() - started;
-      const pct = Math.min(1, elapsed / STORY_DURATION_MS);
+      const total = baseElapsed + (Date.now() - startedAt);
+      elapsedRef.current = total;
+      const pct = Math.min(1, total / STORY_DURATION_MS);
       setProgress(pct);
       if (pct >= 1) {
         window.clearInterval(id);
@@ -71,12 +108,18 @@ export function StoryViewer({
         }
       }
     }, 50);
-    return () => window.clearInterval(id);
-  }, [index, stories.length, onClose]);
+    return () => {
+      elapsedRef.current = baseElapsed + (Date.now() - startedAt);
+      window.clearInterval(id);
+    };
+  }, [index, paused, stories.length, onClose]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
+      // Arrow keys would interrupt typing in the reply input — only nav
+      // when the composer isn't in focus.
+      if (inputFocused) return;
       if (e.key === "ArrowRight") setIndex((i) => Math.min(i + 1, stories.length - 1));
       if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
     }
@@ -86,7 +129,7 @@ export function StoryViewer({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [stories.length, onClose]);
+  }, [stories.length, onClose, inputFocused]);
 
   async function handleReply() {
     if (!sellerId || !reply.trim() || sending || !story) return;
@@ -110,9 +153,62 @@ export function StoryViewer({
     }
   }
 
+  async function handleStartVoice() {
+    if (!sellerId || !story) return;
+    if (!user) {
+      router.push(`/login?next=/shops/${story.shopId}`);
+      return;
+    }
+    await recorder.start();
+  }
+
+  async function handleSendVoice() {
+    if (!sellerId || !story || sending) return;
+    const result = await recorder.stop();
+    if (!result) return;
+    if (!user) return;
+    setSending(true);
+    try {
+      const { conversationId } = await startConversation({ sellerId });
+      await sendVoiceMessage(conversationId, result.file, result.durationMs, {
+        storyId: story.id,
+      });
+      toast.success("Voice note sent", "Continuing in your inbox.");
+      onClose();
+      router.push(`/inbox/${conversationId}`);
+    } catch (err) {
+      toast.fromApiError("Couldn't send", err);
+      setSending(false);
+    }
+  }
+
+  // Auto-stop + send when the recorder hits the 3-minute cap. Mirrors the
+  // chat's behavior — keeps backend body-size limit in the safe zone.
+  useEffect(() => {
+    if (recorder.state.kind === "recording" && recordingMs >= MAX_VOICE_MS) {
+      void handleSendVoice();
+    }
+    // handleSendVoice closes over a lot — referencing recordingMs is
+    // enough to fire when the cap hits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingMs, recorder.state.kind]);
+
+  // Show a friendly toast when mic access is denied so the buyer knows
+  // why nothing happened. Dismiss the state so they can try again.
+  useEffect(() => {
+    if (recorder.state.kind === "denied") {
+      toast.error(
+        "Microphone blocked",
+        "Allow mic access in your browser settings to send voice notes."
+      );
+      recorder.dismissDenied();
+    }
+  }, [recorder.state.kind, recorder]);
+
   if (!story || !story.media) return null;
   const isVideo = story.media.type === "video";
   const canReply = Boolean(sellerId);
+  const hasText = reply.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black animate-in fade-in duration-200">
@@ -216,17 +312,26 @@ export function StoryViewer({
       </div>
 
       <div className="relative z-10 flex flex-col gap-3 bg-linear-to-t from-black/90 to-transparent px-4 pb-8 pt-12 text-white">
-        {story.caption && (
+        {story.caption && !isRecording && (
           <Typography variant="body-md" className="max-w-2xl">
             {story.caption}
           </Typography>
         )}
-        {canReply && (
+        {canReply && isRecording ? (
+          <VoiceReplyBar
+            durationMs={recordingMs}
+            starting={recorder.state.kind === "starting"}
+            onCancel={recorder.cancel}
+            onSend={handleSendVoice}
+          />
+        ) : canReply ? (
           <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 backdrop-blur">
             <input
               type="text"
               value={reply}
               onChange={(e) => setReply(e.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -239,22 +344,35 @@ export function StoryViewer({
               disabled={sending}
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-white/60 disabled:opacity-50"
             />
-            <button
-              type="button"
-              onClick={handleReply}
-              disabled={!reply.trim() || sending}
-              aria-label="Send reply"
-              className="grid size-8 place-items-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 disabled:opacity-40"
-            >
-              {sending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Send className="size-4" />
-              )}
-            </button>
+            {hasText ? (
+              <button
+                type="button"
+                onClick={handleReply}
+                disabled={!reply.trim() || sending}
+                aria-label="Send reply"
+                className="grid size-8 place-items-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 disabled:opacity-40"
+              >
+                {sending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartVoice}
+                disabled={sending}
+                aria-label="Record voice note"
+                title="Hold space for voice — tap to start"
+                className="grid size-8 place-items-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 disabled:opacity-40"
+              >
+                <Mic className="size-4" />
+              </button>
+            )}
           </div>
-        )}
-        {story.productId && (
+        ) : null}
+        {story.productId && !isRecording && (
           <Link
             href={`/products/${story.productId}`}
             className="inline-flex w-fit items-center gap-2 rounded-full bg-accent px-4 py-2 text-accent-foreground"
@@ -264,6 +382,91 @@ export function StoryViewer({
           </Link>
         )}
       </div>
+    </div>
+  );
+}
+
+interface VoiceReplyBarProps {
+  durationMs: number;
+  starting: boolean;
+  onCancel: () => void;
+  onSend: () => void;
+}
+
+function formatVoiceDuration(ms: number): string {
+  const clamped = Math.min(ms, MAX_VOICE_MS);
+  const total = Math.floor(clamped / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Dark-on-dark voice recorder bar shown over the story overlay while a
+ * reply is being recorded. Mirrors VoiceRecorderBar from the chat but
+ * styled for the high-contrast story chrome.
+ */
+function VoiceReplyBar({
+  durationMs,
+  starting,
+  onCancel,
+  onSend,
+}: VoiceReplyBarProps) {
+  const atCap = durationMs >= MAX_VOICE_MS;
+  return (
+    <div className="flex items-center gap-3 rounded-full bg-white/10 px-3 py-2 backdrop-blur">
+      <button
+        type="button"
+        onClick={onCancel}
+        aria-label="Cancel recording"
+        className="grid size-9 shrink-0 place-items-center rounded-full text-white/80 transition-colors hover:bg-destructive/20 hover:text-destructive"
+      >
+        <Trash2 className="size-4" />
+      </button>
+      <div className="flex min-w-0 flex-1 items-center gap-2 text-white">
+        {starting ? (
+          <>
+            <Loader2 className="size-4 animate-spin" />
+            <Typography variant="body-sm" className="text-white/80">
+              Requesting mic…
+            </Typography>
+          </>
+        ) : (
+          <>
+            <span
+              aria-hidden
+              className="relative grid size-2.5 shrink-0 place-items-center"
+            >
+              <span className="absolute inset-0 animate-ping rounded-full bg-destructive/60" />
+              <span className="relative size-2 rounded-full bg-destructive" />
+            </span>
+            <Typography
+              variant="label-md"
+              className={cn(
+                "font-mono tabular-nums",
+                atCap && "text-destructive"
+              )}
+            >
+              {formatVoiceDuration(durationMs)}
+            </Typography>
+            <Typography
+              variant="caption"
+              className="truncate text-white/70"
+            >
+              {atCap ? "Max length" : "Recording…"}
+            </Typography>
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onSend}
+        disabled={starting}
+        aria-label="Send voice note"
+        className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Send className="size-4" />
+      </button>
     </div>
   );
 }

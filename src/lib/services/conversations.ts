@@ -338,6 +338,7 @@ export async function sendImageMessage(
   fd.append("image_file", file);
   if (caption) fd.append("caption", caption);
   if (opts.contextProductId) fd.append("contextProductId", opts.contextProductId);
+  if (opts.storyId) fd.append("storyId", opts.storyId);
   const { data } = await apiClient().post<{ message: unknown }>(
     `/conversations/${conversationId}/messages/image`,
     fd
@@ -359,6 +360,7 @@ export async function sendVoiceMessage(
   fd.append("audio_file", file);
   fd.append("durationMs", String(durationMs));
   if (opts.contextProductId) fd.append("contextProductId", opts.contextProductId);
+  if (opts.storyId) fd.append("storyId", opts.storyId);
   const { data } = await apiClient().post<{ message: unknown }>(
     `/conversations/${conversationId}/messages/voice`,
     fd
