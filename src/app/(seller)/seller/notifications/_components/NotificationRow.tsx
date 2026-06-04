@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock,
   Gift,
+  Heart,
   Megaphone,
   ShieldCheck,
   Sparkles,
@@ -45,6 +46,7 @@ const ICON: Record<NotificationType, LucideIcon> = {
   shop_reopened: Store,
   story_posted: Sparkles,
   payout_awaiting_account: Wallet,
+  follow: Heart,
 };
 
 const ICON_TINT: Record<NotificationType, string> = {
@@ -61,7 +63,20 @@ const ICON_TINT: Record<NotificationType, string> = {
   shop_reopened: "bg-primary/10 text-primary",
   story_posted: "bg-accent/15 text-accent",
   payout_awaiting_account: "bg-accent/15 text-accent",
+  follow: "bg-primary/10 text-primary",
 };
+
+/**
+ * Backend's notification `link` field occasionally points at a route
+ * that doesn't exist on the frontend (e.g. `follow` notifications link
+ * to `/seller/shop/followers` but our actual route is
+ * `/seller/followers`). Normalize them here in one place — easier than
+ * chasing backend through every drift.
+ */
+function normalizeLink(notification: Notification): string | null {
+  if (notification.type === "follow") return "/seller/followers";
+  return notification.link ?? null;
+}
 
 export function NotificationRow({ notification }: NotificationRowProps) {
   const Icon = ICON[notification.type];
@@ -136,8 +151,9 @@ export function NotificationRow({ notification }: NotificationRowProps) {
     </div>
   );
 
-  if (notification.link) {
-    return <Link href={notification.link}>{inner}</Link>;
+  const href = normalizeLink(notification);
+  if (href) {
+    return <Link href={href}>{inner}</Link>;
   }
   // Outer <li> is provided by the list (NotificationsListClient). Returning
   // <li> here would nest <li> inside <li> — invalid HTML, hydration error.

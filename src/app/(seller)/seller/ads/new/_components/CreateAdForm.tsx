@@ -9,6 +9,7 @@ import { BoostPlanList } from "@/app/(seller)/seller/products/_components/BoostP
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/Textarea";
 import { Typography } from "@/components/Typography";
+import { extractApiError } from "@/lib/api";
 import {
   purchaseDiscoverCampaign,
   uploadDiscoverPost,
@@ -34,6 +35,7 @@ interface CreateAdFormProps {
 }
 
 type Target = "product" | "shop";
+type Mode = "free" | "boost";
 
 export function CreateAdForm({ products, shop }: CreateAdFormProps) {
   const router = useRouter();
@@ -46,6 +48,9 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
   const [posterFile, setPosterFile] = useState<File | null>(null);
   const [posterPreviewUrl, setPosterPreviewUrl] = useState("");
   const [caption, setCaption] = useState("");
+  // Default to "boost" — paid is the recommended path and converts better.
+  // Users who want free toggle off explicitly.
+  const [mode, setMode] = useState<Mode>("boost");
   const [planId, setPlanId] = useState<BoostPlanId>("monthly");
   const [submitting, setSubmitting] = useState(false);
 
@@ -133,7 +138,18 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
           target === "product"
             ? { type: "product", productId }
             : { type: "shop", shopId: shop.id },
+        intent: mode,
       });
+      if (mode === "free") {
+        // Free path: post is live in the organic mix immediately. Drop the
+        // seller at the analytics page where they can boost later.
+        toast.success(
+          "Posted to Discover",
+          "Live for 30 days. Boost it any time to surface to more buyers."
+        );
+        router.push(`/seller/ads/${post.id}`);
+        return;
+      }
       const { authorization_url } = await purchaseDiscoverCampaign({
         postId: post.id,
         planId,
@@ -142,7 +158,16 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
       // and the return URL drops the seller back at the analytics page.
       window.location.href = authorization_url;
     } catch (err) {
-      toast.fromApiError("Couldn't create the ad", err);
+      const apiErr = extractApiError(err);
+      if (apiErr?.code === "free_discover_limit") {
+        toast.error(
+          "Free post limit hit",
+          "You can post 3 free Discover videos per month. Boost an existing post instead, or wait until your earliest free post expires.",
+          apiErr.requestId
+        );
+      } else {
+        toast.fromApiError("Couldn't create the post", err);
+      }
       setSubmitting(false);
       router.refresh();
     }
@@ -285,12 +310,46 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
       </section>
 
       <section className="flex flex-col gap-3">
-        <Typography variant="heading-h3">Pick a plan</Typography>
-        <BoostPlanList planId={planId} onSelect={setPlanId} />
-        <Typography variant="caption" className="text-muted-foreground">
-          Runs for {chosen.months} {chosen.months === 1 ? "month" : "months"}.
-          Cancel anytime; no auto-renew.
-        </Typography>
+        <Typography variant="heading-h3">Launch it</Typography>
+        <div className="grid grid-cols-2 gap-2">
+          <ModeCard
+            active={mode === "boost"}
+            onClick={() => setMode("boost")}
+            label="Pay to boost"
+            hint="Priority slots in Discover for the full plan duration"
+            recommended
+          />
+          <ModeCard
+            active={mode === "free"}
+            onClick={() => setMode("free")}
+            label="Post for free"
+            hint="30-day organic placement. Boost later if it picks up."
+          />
+        </div>
+
+        {mode === "boost" ? (
+          <>
+            <BoostPlanList planId={planId} onSelect={setPlanId} />
+            <Typography variant="caption" className="text-muted-foreground">
+              Runs for {chosen.months}{" "}
+              {chosen.months === 1 ? "month" : "months"}. Cancel anytime; no
+              auto-renew.
+            </Typography>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-border bg-muted/40 p-4">
+            <Typography variant="body-sm" className="text-foreground">
+              Free posts live for 30 days in the organic mix. You can boost
+              this video later to push it into priority slots.
+            </Typography>
+            <Typography
+              variant="caption"
+              className="mt-1 text-muted-foreground"
+            >
+              Limit: 3 free Discover posts per shop per 30 days.
+            </Typography>
+          </div>
+        )}
       </section>
 
       <Button
@@ -300,11 +359,73 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
         disabled={!valid || submitting}
       >
         <ShieldCheck className="size-4" />
-        {submitting
-          ? "Uploading & opening Paystack…"
-          : `Pay ${formatNaira(chosen.priceNaira)} & launch`}
+        {submittingLabel({ submitting, mode, chosen })}
       </Button>
     </div>
+  );
+}
+
+function submittingLabel({
+  submitting,
+  mode,
+  chosen,
+}: {
+  submitting: boolean;
+  mode: Mode;
+  chosen: { priceNaira: number };
+}): string {
+  if (submitting) {
+    return mode === "free"
+      ? "Posting…"
+      : "Uploading & opening Paystack…";
+  }
+  return mode === "free"
+    ? "Post to Discover"
+    : `Pay ${formatNaira(chosen.priceNaira)} & launch`;
+}
+
+interface ModeCardProps {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  hint: string;
+  recommended?: boolean;
+}
+
+function ModeCard({
+  active,
+  onClick,
+  label,
+  hint,
+  recommended,
+}: ModeCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "relative flex flex-col gap-1 rounded-2xl border-2 border-primary bg-primary/4 p-4 text-left"
+          : "relative flex flex-col gap-1 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/40"
+      }
+    >
+      <div className="flex items-center gap-2">
+        <Typography variant="label-lg">{label}</Typography>
+        {recommended && (
+          <span className="rounded-full bg-accent/15 px-2 py-0.5">
+            <Typography
+              variant="caption"
+              className="font-semibold text-accent"
+            >
+              Recommended
+            </Typography>
+          </span>
+        )}
+      </div>
+      <Typography variant="caption" className="text-muted-foreground">
+        {hint}
+      </Typography>
+    </button>
   );
 }
 

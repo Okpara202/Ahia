@@ -1,13 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Eye, MousePointerClick, TrendingUp, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  Eye,
+  MousePointerClick,
+  TrendingUp,
+  Wallet,
+  Zap,
+} from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
 import { formatNaira } from "@/lib/format";
-import { getDiscoverAdAnalytics } from "@/lib/services/discover";
+import {
+  getDiscoverPostAnalytics,
+  getDiscoverPostById,
+} from "@/lib/services/discover";
 import { AdAnalyticsChart } from "./_components/AdAnalyticsChart";
 import { AdPreviewCard } from "./_components/AdPreviewCard";
+import { BoostExistingPostButton } from "./_components/BoostExistingPostButton";
+import { EditPostControls } from "./_components/EditPostControls";
 
 interface AdAnalyticsPageProps {
   params: Promise<{ id: string }>;
@@ -15,31 +26,60 @@ interface AdAnalyticsPageProps {
 
 export async function generateMetadata({ params }: AdAnalyticsPageProps) {
   const { id } = await params;
-  const data = await getDiscoverAdAnalytics(id);
+  const post = await getDiscoverPostById(id);
   return {
-    title: data
-      ? `${data.post.caption ?? "Ad"} — Ahia Seller`
-      : "Ad not found — Ahia Seller",
+    title: post
+      ? `${post.caption ?? "Discover post"} — Ahia Seller`
+      : "Post not found — Ahia Seller",
   };
 }
 
+/**
+ * Single-post page for `/seller/ads/[id]`.
+ *
+ * Renders two modes off the same URL:
+ *   - Organic / expired post → preview + counters + "Boost this" CTA
+ *   - Sponsored post → preview + counters + chart + edit controls
+ *
+ * Discover v2 keys this off post id (not campaign id) so free posts get
+ * a landing page too. Campaign data is only fetched when the post is
+ * actively sponsored.
+ */
 export default async function AdAnalyticsPage({ params }: AdAnalyticsPageProps) {
   const { id } = await params;
-  const data = await getDiscoverAdAnalytics(id);
-  if (!data) notFound();
+  const post = await getDiscoverPostById(id);
+  if (!post) notFound();
 
-  const { campaign, post, daily } = data;
-  // Server component renders at request time — clock read is intentional.
+  // Prefer backend's server-computed status; fall back to local
+  // computation if the field's absent (e.g. mocks or older endpoints).
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
-  const endsTs = new Date(campaign.endsAt).getTime();
-  const daysLeft = Math.max(0, Math.round((endsTs - now) / (1000 * 60 * 60 * 24)));
-  const expired = endsTs < now;
+  const expiresTs = post.expiresAt ? new Date(post.expiresAt).getTime() : null;
+  const localExpired = expiresTs !== null && expiresTs < now;
+  const lifecycle: "organic" | "boosted" | "expired" =
+    post.status ??
+    (localExpired ? "expired" : post.sponsored ? "boosted" : "organic");
+  const sponsored = lifecycle === "boosted";
+  const expired = lifecycle === "expired";
+  const daysLeft =
+    expiresTs !== null
+      ? Math.max(0, Math.round((expiresTs - now) / (1000 * 60 * 60 * 24)))
+      : null;
+
+  const analytics = sponsored ? await getDiscoverPostAnalytics(id) : null;
+  const campaign = analytics?.campaign ?? null;
+  const daily = analytics?.daily ?? [];
 
   const ctr =
     post.impressions > 0
       ? ((post.clicks / post.impressions) * 100).toFixed(1)
       : "0.0";
+
+  const status = expired
+    ? "Expired"
+    : sponsored
+      ? `Sponsored${daysLeft !== null ? ` · ${daysLeft}d left` : ""}`
+      : `Organic${daysLeft !== null ? ` · ${daysLeft}d left` : ""}`;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -54,16 +94,26 @@ export default async function AdAnalyticsPage({ params }: AdAnalyticsPageProps) 
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1">
           <Typography variant="overline" className="text-muted-foreground">
-            {expired ? "Ended" : `Running • ${daysLeft} days left`}
+            {status}
           </Typography>
           <Typography variant="heading-h1">
-            {post.caption ?? "Untitled ad"}
+            {post.caption ?? "Untitled post"}
           </Typography>
         </div>
-        {!expired && (
-          <Button variant="cta" size="lg">
-            Extend campaign
-          </Button>
+        {!sponsored && !expired && (
+          <BoostExistingPostButton
+            postId={post.id}
+            views={post.impressions}
+          />
+        )}
+        {expired && (
+          <Link
+            href="/seller/ads/new"
+            className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-accent-foreground transition-opacity hover:opacity-90"
+          >
+            <Zap className="size-4" />
+            <Typography variant="label-md">Re-upload to relaunch</Typography>
+          </Link>
         )}
       </header>
 
@@ -84,13 +134,23 @@ export default async function AdAnalyticsPage({ params }: AdAnalyticsPageProps) 
             <Kpi label="CTR" value={`${ctr}%`} icon={TrendingUp} />
             <Kpi
               label="Spent"
-              value={formatNaira(campaign.amountPaid)}
+              value={
+                campaign ? formatNaira(campaign.amountPaid) : "—"
+              }
               icon={Wallet}
             />
           </div>
-          <AdAnalyticsChart data={daily} />
+          {sponsored && daily.length > 0 && <AdAnalyticsChart data={daily} />}
         </div>
       </div>
+
+      {sponsored && (
+        <EditPostControls
+          postId={post.id}
+          caption={post.caption ?? ""}
+          editsRemaining={post.editsRemaining ?? 0}
+        />
+      )}
     </div>
   );
 }

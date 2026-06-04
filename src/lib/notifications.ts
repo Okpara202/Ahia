@@ -62,6 +62,10 @@ const FALLBACK_LABELS: Record<
     title: "Payout waiting",
     body: "Add your payout account to receive funds that are ready to release.",
   },
+  follow: {
+    title: "New follower",
+    body: "Open your followers list to say hi.",
+  },
 };
 
 /** Pick the best title for a notification: backend-rendered if present,

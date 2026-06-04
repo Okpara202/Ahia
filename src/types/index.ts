@@ -124,6 +124,29 @@ export interface DiscoverPost {
     | { type: "product"; productId: string }
     | { type: "shop"; shopId: string };
   createdAt: string;
+  /** Discover v2: 30-day TTL on every post. When boost-later replaces or
+   *  extends the clock, this moves accordingly. Optional because the
+   *  public `/discover` feed may not carry it — only the seller-facing
+   *  `/discover/posts/me` does. */
+  expiresAt?: string;
+  /** True when an active paid campaign is attached. Drives the "boost
+   *  this" CTA on organic posts and unlocks the edit controls on paid
+   *  ones. */
+  sponsored?: boolean;
+  /** Lifetime edit cap counter (starts at 3, decremented on each accepted
+   *  edit). Backend writes this; frontend gates the UI on it. Undefined
+   *  on the public feed (non-owners can't edit anyway). */
+  editsRemaining?: number;
+  /** ISO timestamp of the most recent edit, null if never edited. */
+  lastEditedAt?: string | null;
+  /** Server-computed lifecycle state — frontend prefers this over
+   *  computing locally because backend has the source of truth on what
+   *  "boosted" means (active campaign row). */
+  status?: "organic" | "boosted" | "expired";
+  /** Internal: tracks whether the post was uploaded with `intent=free`.
+   *  Drives the 3-per-30d cap accounting server-side; frontend rarely
+   *  needs it but surfaced for completeness. */
+  intentFree?: boolean;
   /** Lifetime counters (mocked; updated by backend in production). */
   impressions: number;
   clicks: number;
@@ -468,7 +491,11 @@ export type NotificationType =
   | "story_posted"
   /** Fired when funds are ready for release but the seller has no payout
    *  account on file. `data` carries `{ transactionId, amount }`. */
-  | "payout_awaiting_account";
+  | "payout_awaiting_account"
+  /** A user followed your shop. Idempotent — re-following doesn't fire
+   *  again. `data` carries `{ followerId, followerHandle?, followerName,
+   *  shopId }`. */
+  | "follow";
 
 export interface Notification {
   id: string;
