@@ -31,6 +31,7 @@ export function BuyerBottomNav() {
           icon={MessageCircle}
           label="Inbox"
           badge={unreadChat}
+          unread
           authRequired
         />
         <NavTab
@@ -38,6 +39,7 @@ export function BuyerBottomNav() {
           icon={Bell}
           label="Alerts"
           badge={unreadNotifs}
+          unread
           authRequired
         />
       </div>

@@ -13,6 +13,10 @@ interface NavTabProps {
   icon: LucideIcon;
   label: string;
   badge?: number;
+  /** When true, render a green dot if there's anything unseen instead of a
+   *  numeric count. Use for inbox / notifications where the count is less
+   *  useful than the "there's something for you" signal. */
+  unread?: boolean;
   /** When true, guest clicks redirect to /signup?next=... instead of navigating. */
   authRequired?: boolean;
 }
@@ -22,16 +26,20 @@ export function NavTab({
   icon: Icon,
   label,
   badge,
+  unread,
   authRequired,
 }: NavTabProps) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(`${href}/`);
   const requireAuth = useRequireAuth();
+  const showDot = unread && badge !== undefined && badge > 0;
+  const showCount = !unread && badge !== undefined && badge > 0;
 
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
+      aria-label={showDot ? `${label} (unread)` : label}
       onClick={(e) => {
         if (authRequired && !requireAuth(`to open ${label.toLowerCase()}`)) {
           e.preventDefault();
@@ -46,10 +54,16 @@ export function NavTab({
     >
       <span className="relative">
         <Icon className={cn("size-5", active && "stroke-[2.25]")} />
-        {badge !== undefined && badge > 0 && (
+        {showCount && (
           <span className="absolute -right-1.5 -top-1 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-4 text-accent-foreground">
             {badge > 9 ? "9+" : badge}
           </span>
+        )}
+        {showDot && (
+          <span
+            aria-hidden
+            className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-background bg-success"
+          />
         )}
       </span>
       <Typography

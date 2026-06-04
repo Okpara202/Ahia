@@ -106,7 +106,7 @@ function Row({ shop, onMessage, messaging }: RowProps) {
         href={`/shops/${shop.shopId}`}
         className="flex min-w-0 flex-1 items-center gap-3"
       >
-        <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-muted">
+        <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-muted">
           {shop.avatarUrl ? (
             <Image
               src={shop.avatarUrl}
@@ -118,17 +118,14 @@ function Row({ shop, onMessage, messaging }: RowProps) {
           ) : (
             <Store className="size-5 text-muted-foreground" />
           )}
-          {shop.isOnline && (
-            <span
-              aria-label="Online"
-              className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-card bg-success"
-            />
-          )}
         </span>
-        <div className="flex min-w-0 flex-col">
-          <Typography variant="label-md" className="truncate">
-            {shop.name}
-          </Typography>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <Typography variant="label-md" className="truncate">
+              {shop.name}
+            </Typography>
+            {shop.isOnline && <OnlinePill />}
+          </div>
           <Typography
             variant="caption"
             className="truncate text-muted-foreground"
@@ -148,6 +145,16 @@ function Row({ shop, onMessage, messaging }: RowProps) {
         {messaging ? "Opening…" : "Message"}
       </Button>
     </div>
+  );
+}
+
+function OnlinePill() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-success/15 px-2 py-0.5 text-success">
+      <Typography variant="caption" className="font-medium">
+        Online
+      </Typography>
+    </span>
   );
 }
 

@@ -10,7 +10,6 @@ import { PageLoader } from "@/components/PageLoader";
 import { Typography } from "@/components/Typography";
 import { extractApiError } from "@/lib/api";
 import { startConversation } from "@/lib/actions/conversations";
-import { formatRelativeTime } from "@/lib/format";
 import { getMyFollowers, type ShopFollower } from "@/lib/services/following";
 import { toast } from "@/store/toastStore";
 
@@ -131,7 +130,7 @@ interface RowProps {
 function Row({ follower, onMessage, messaging }: RowProps) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition-colors hover:bg-muted/40">
-      <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-muted">
+      <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-muted">
         {follower.avatarUrl ? (
           <Image
             src={follower.avatarUrl}
@@ -143,23 +142,12 @@ function Row({ follower, onMessage, messaging }: RowProps) {
         ) : (
           <User className="size-5 text-muted-foreground" />
         )}
-        {follower.isOnline && (
-          <span
-            aria-label="Online"
-            className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-card bg-success"
-          />
-        )}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <Typography variant="label-md" className="truncate">
           {follower.name}
         </Typography>
-        <Typography
-          variant="caption"
-          className="truncate text-muted-foreground"
-        >
-          Followed {formatRelativeTime(follower.followedAt)}
-        </Typography>
+        {follower.isOnline && <OnlinePill />}
       </div>
       <Button
         type="button"
@@ -177,6 +165,16 @@ function Row({ follower, onMessage, messaging }: RowProps) {
         {messaging ? "Opening…" : "Message"}
       </Button>
     </div>
+  );
+}
+
+function OnlinePill() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-success/15 px-2 py-0.5 text-success">
+      <Typography variant="caption" className="font-medium">
+        Online
+      </Typography>
+    </span>
   );
 }
 

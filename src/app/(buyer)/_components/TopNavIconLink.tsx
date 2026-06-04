@@ -17,6 +17,9 @@ interface TopNavIconLinkProps {
   icon: LucideIcon;
   className?: string;
   badge?: number;
+  /** When true, render a green unread dot instead of a numeric count.
+   *  Use for inbox / notifications. */
+  unread?: boolean;
 }
 
 export function TopNavIconLink({
@@ -25,11 +28,18 @@ export function TopNavIconLink({
   icon: Icon,
   className,
   badge,
+  unread,
 }: TopNavIconLinkProps) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(`${href}/`);
-  const showBadge = badge !== undefined && badge > 0;
-  const tooltipLabel = showBadge ? `${label} (${badge} unread)` : label;
+  const hasBadge = badge !== undefined && badge > 0;
+  const showDot = !!unread && hasBadge;
+  const showCount = !unread && hasBadge;
+  const tooltipLabel = showDot
+    ? `${label} (unread)`
+    : showCount
+      ? `${label} (${badge})`
+      : label;
 
   return (
     <Tooltip>
@@ -47,13 +57,19 @@ export function TopNavIconLink({
           )}
         >
           <Icon className={cn("size-4", active && "stroke-[2.25]")} />
-          {showBadge && (
+          {showCount && (
             <span
               aria-hidden
               className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-4 text-accent-foreground"
             >
               {badge > 9 ? "9+" : badge}
             </span>
+          )}
+          {showDot && (
+            <span
+              aria-hidden
+              className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-background bg-success"
+            />
           )}
           {active && (
             <span

@@ -73,6 +73,7 @@ export function BuyerTopNav() {
                 icon={MessageCircle}
                 className="hidden md:grid"
                 badge={unreadChat}
+                unread
               />
               <TopNavIconLink
                 href="/notifications"
@@ -80,6 +81,7 @@ export function BuyerTopNav() {
                 icon={Bell}
                 className="hidden md:grid"
                 badge={unreadNotifs}
+                unread
               />
             </>
           )}

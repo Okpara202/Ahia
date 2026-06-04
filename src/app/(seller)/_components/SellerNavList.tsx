@@ -25,7 +25,11 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  badge?: number;
+  /** When true and there's at least one unread item, render a green dot
+   *  instead of a numeric count. Inbox / notifications use this so the
+   *  signal is "there's something for you" rather than a noisy count. */
+  unread?: boolean;
+  unreadCount?: number;
 }
 
 interface SellerNavListProps {
@@ -43,21 +47,22 @@ export function SellerNavList({ onNavigate }: SellerNavListProps) {
     { href: "/seller/ads", label: "Ads", icon: Megaphone },
     { href: "/seller/stories", label: "Stories", icon: Sparkles },
     { href: "/seller/followers", label: "Followers", icon: Users },
-    { href: "/seller/inbox", label: "Inbox", icon: MessageCircle, badge: unreadConversations },
+    { href: "/seller/inbox", label: "Inbox", icon: MessageCircle, unread: true, unreadCount: unreadConversations },
     { href: "/seller/transactions", label: "Transactions", icon: Wallet },
     { href: "/seller/payouts", label: "Payouts", icon: Wallet },
-    { href: "/seller/notifications", label: "Notifications", icon: Bell, badge: unreadNotifications },
+    { href: "/seller/notifications", label: "Notifications", icon: Bell, unread: true, unreadCount: unreadNotifications },
     { href: "/seller/shop", label: "Shop settings", icon: Store },
     { href: "/seller/settings", label: "Settings", icon: Settings },
   ];
 
   return (
     <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Seller navigation">
-      {items.map(({ href, label, icon: Icon, badge }) => {
+      {items.map(({ href, label, icon: Icon, unread, unreadCount }) => {
         const active =
           href === "/seller"
             ? pathname === href
             : pathname === href || pathname.startsWith(`${href}/`);
+        const showDot = !!unread && (unreadCount ?? 0) > 0;
 
         return (
           <Link
@@ -65,6 +70,7 @@ export function SellerNavList({ onNavigate }: SellerNavListProps) {
             href={href}
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
+            aria-label={showDot ? `${label} (unread)` : undefined}
             className={cn(
               "group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
               active
@@ -84,10 +90,11 @@ export function SellerNavList({ onNavigate }: SellerNavListProps) {
             >
               {label}
             </Typography>
-            {badge !== undefined && badge > 0 && (
-              <span className="grid min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-5 text-accent-foreground">
-                {badge > 9 ? "9+" : badge}
-              </span>
+            {showDot && (
+              <span
+                aria-hidden
+                className="size-2 shrink-0 rounded-full bg-success"
+              />
             )}
           </Link>
         );
