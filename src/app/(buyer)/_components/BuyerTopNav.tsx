@@ -1,27 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Bell,
-  Bookmark,
-  Compass,
-  MessageCircle,
-  Search,
-  UserRound,
-} from "lucide-react";
+import { Bell, Bookmark, Compass, MessageCircle, Search } from "lucide-react";
 
 import { Logo, LogoMark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useWishlistStore } from "@/store/wishlistStore";
+import { ProfileMenu } from "./ProfileMenu";
 import { SearchBar } from "./SearchBar";
 import { SwitchToSellerButton } from "./SwitchToSellerButton";
 import { TopNavIconLink } from "./TopNavIconLink";
@@ -89,18 +78,7 @@ export function BuyerTopNav() {
           <ThemeToggle />
 
           {isAuthed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/profile"
-                  aria-label="Profile"
-                  className="grid size-8 place-items-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-                >
-                  <UserRound className="size-4" />
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>Profile</TooltipContent>
-            </Tooltip>
+            <ProfileMenu />
           ) : (
             <div className="ml-1 flex items-center gap-2">
               <Button asChild variant="ghost" size="sm">
