@@ -3,13 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Heart,
-  LogOut,
-  Receipt,
-  Settings,
-  UserRound,
-} from "lucide-react";
+import { Heart, LogOut, Receipt, UserRound } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -113,13 +107,6 @@ export function ProfileMenu() {
           <Link href="/transactions">
             <Receipt className="size-4 text-muted-foreground" />
             <span className="flex-1">Transactions</span>
-          </Link>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem asChild>
-          <Link href="/profile#preferences">
-            <Settings className="size-4 text-muted-foreground" />
-            <span className="flex-1">Preferences</span>
           </Link>
         </DropdownMenuItem>
 
