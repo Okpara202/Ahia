@@ -6,25 +6,29 @@ import { Loader2, Megaphone, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
-import { getMyDiscoverCampaigns } from "@/lib/services/discover";
+import { getMyDiscoverPosts } from "@/lib/services/discover";
 import { useSellerShopStore } from "@/store/sellerShopStore";
-import type { DiscoverAdCampaign, DiscoverPost } from "@/types";
+import type { DiscoverPost } from "@/types";
 import { AdsListClient } from "./AdsListClient";
 
-type CampaignWithPost = DiscoverAdCampaign & { post: DiscoverPost };
-
+/**
+ * Discover v2: this list now shows ALL the seller's posts — free
+ * (organic), boosted (paid), and expired — not just paid campaigns.
+ * Drives a single inbox-style list where each row's visual state tells
+ * the seller what's happening with that post.
+ */
 export function AdsPanel() {
   const shop = useSellerShopStore((s) => s.shop);
-  const [campaigns, setCampaigns] = useState<CampaignWithPost[]>([]);
+  const [posts, setPosts] = useState<DiscoverPost[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!shop) return;
     let cancelled = false;
-    getMyDiscoverCampaigns(shop.id)
-      .then((c) => {
+    getMyDiscoverPosts({ limit: 50 })
+      .then((page) => {
         if (cancelled) return;
-        setCampaigns(c);
+        setPosts(page.items);
         setLoaded(true);
       })
       .catch(() => {
@@ -39,19 +43,16 @@ export function AdsPanel() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2
-          aria-label="Loading ads"
+          aria-label="Loading posts"
           className="size-6 animate-spin text-muted-foreground"
         />
       </div>
     );
   }
 
-  const totalSpend = campaigns.reduce((sum, c) => sum + c.amountPaid, 0);
-  const totalImpressions = campaigns.reduce(
-    (sum, c) => sum + c.post.impressions,
-    0
-  );
-  const totalClicks = campaigns.reduce((sum, c) => sum + c.post.clicks, 0);
+  const totalImpressions = posts.reduce((sum, p) => sum + p.impressions, 0);
+  const totalClicks = posts.reduce((sum, p) => sum + p.clicks, 0);
+  const sponsoredCount = posts.filter((p) => p.sponsored).length;
   const ctr =
     totalImpressions > 0
       ? ((totalClicks / totalImpressions) * 100).toFixed(1)
@@ -61,23 +62,31 @@ export function AdsPanel() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1">
-          <Typography variant="heading-h1">Discover ads</Typography>
+          <Typography variant="heading-h1">Discover posts</Typography>
           <Typography variant="body-sm" className="text-muted-foreground">
-            Pay to put your video in front of buyers in the Discover feed.
+            Post videos to Discover. Free for 30 days; boost any to surface
+            into priority slots.
           </Typography>
         </div>
         <Button asChild variant="cta" size="lg">
           <Link href="/seller/ads/new">
             <Plus className="size-4" />
-            Create ad
+            New post
           </Link>
         </Button>
       </header>
 
-      {campaigns.length > 0 && (
+      {posts.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-3">
-          <Stat label="Total spend" value={`₦${totalSpend.toLocaleString("en-NG")}`} />
-          <Stat label="Impressions" value={totalImpressions.toLocaleString("en-NG")} />
+          <Stat
+            label="Posts"
+            value={posts.length.toString()}
+            hint={`${sponsoredCount} boosted`}
+          />
+          <Stat
+            label="Impressions"
+            value={totalImpressions.toLocaleString("en-NG")}
+          />
           <Stat
             label="Avg. CTR"
             value={`${ctr}%`}
@@ -86,7 +95,7 @@ export function AdsPanel() {
         </div>
       )}
 
-      {campaigns.length === 0 ? <EmptyState /> : <AdsListClient campaigns={campaigns} />}
+      {posts.length === 0 ? <EmptyState /> : <AdsListClient posts={posts} />}
     </div>
   );
 }
@@ -124,15 +133,15 @@ function EmptyState() {
       >
         <Megaphone className="size-6" />
       </span>
-      <Typography variant="heading-h3">No ads running yet</Typography>
+      <Typography variant="heading-h3">No Discover posts yet</Typography>
       <Typography variant="body-sm" className="max-w-md text-muted-foreground">
-        Upload a short vertical video and put it in front of every buyer
-        scrolling Discover. You&apos;ll see views and clicks update live.
+        Upload a short vertical video to Discover — free for 30 days, or
+        pay to boost into priority slots. Views and clicks update live.
       </Typography>
       <Button asChild variant="cta" size="lg" className="mt-2">
         <Link href="/seller/ads/new">
           <Plus className="size-4" />
-          Create your first ad
+          Create your first post
         </Link>
       </Button>
     </div>

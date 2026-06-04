@@ -124,6 +124,20 @@ export interface DiscoverPost {
     | { type: "product"; productId: string }
     | { type: "shop"; shopId: string };
   createdAt: string;
+  /** Discover v2: 30-day TTL on every post. When boost-later replaces or
+   *  extends the clock, this moves accordingly. Optional because older
+   *  backend responses may not carry it yet — treat absence as "no TTL
+   *  data, render without countdown." */
+  expiresAt?: string;
+  /** True when an active paid campaign is attached. Drives the "boost
+   *  this" CTA on organic posts and unlocks the edit controls on paid
+   *  ones. */
+  sponsored?: boolean;
+  /** Lifetime edit cap counter (starts at 3, decremented on each accepted
+   *  edit). Backend writes this; frontend gates the UI on it. Undefined
+   *  for posts uploaded before v2 — treat as 0 (no edits allowed) since
+   *  pre-v2 had no edit feature. */
+  editsRemaining?: number;
   /** Lifetime counters (mocked; updated by backend in production). */
   impressions: number;
   clicks: number;

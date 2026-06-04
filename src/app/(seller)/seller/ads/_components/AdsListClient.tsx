@@ -5,49 +5,56 @@ import { Search, X } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
 import { cn } from "@/lib/utils";
-import type { DiscoverAdCampaign, DiscoverPost } from "@/types";
+import type { DiscoverPost } from "@/types";
 import { AdRow } from "./AdRow";
 
-type Campaign = DiscoverAdCampaign & { post: DiscoverPost };
-type Status = "all" | "running" | "ended";
+type Status = "all" | "boosted" | "organic" | "expired";
 
 interface AdsListClientProps {
-  campaigns: Campaign[];
+  posts: DiscoverPost[];
 }
 
 const STATUS_FILTERS: { id: Status; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "running", label: "Running" },
-  { id: "ended", label: "Ended" },
+  { id: "boosted", label: "Boosted" },
+  { id: "organic", label: "Organic" },
+  { id: "expired", label: "Expired" },
 ];
 
-export function AdsListClient({ campaigns }: AdsListClientProps) {
+function classify(
+  post: DiscoverPost,
+  now: number
+): "boosted" | "organic" | "expired" {
+  const expired = post.expiresAt
+    ? new Date(post.expiresAt).getTime() < now
+    : false;
+  if (expired) return "expired";
+  if (post.sponsored) return "boosted";
+  return "organic";
+}
+
+export function AdsListClient({ posts }: AdsListClientProps) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<Status>("all");
   const [now] = useState(() => Date.now());
 
   const counts = useMemo(() => {
-    const ended = campaigns.filter(
-      (c) => new Date(c.endsAt).getTime() < now
-    ).length;
-    return {
-      all: campaigns.length,
-      running: campaigns.length - ended,
-      ended,
-    };
-  }, [campaigns, now]);
+    const tally = { all: posts.length, boosted: 0, organic: 0, expired: 0 };
+    for (const p of posts) {
+      tally[classify(p, now)] += 1;
+    }
+    return tally;
+  }, [posts, now]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return campaigns.filter((c) => {
-      const endsTs = new Date(c.endsAt).getTime();
-      const isEnded = endsTs < now;
-      if (status === "running" && isEnded) return false;
-      if (status === "ended" && !isEnded) return false;
+    return posts.filter((p) => {
+      const cls = classify(p, now);
+      if (status !== "all" && cls !== status) return false;
       if (!q) return true;
-      return (c.post.caption ?? "").toLowerCase().includes(q);
+      return (p.caption ?? "").toLowerCase().includes(q);
     });
-  }, [campaigns, query, status, now]);
+  }, [posts, query, status, now]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -60,7 +67,7 @@ export function AdsListClient({ campaigns }: AdsListClientProps) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search ads by caption…"
+          placeholder="Search posts by caption…"
           className="h-11 w-full rounded-full border border-input bg-card pl-10 pr-10 text-sm shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 dark:bg-input/30"
         />
         {query && (
@@ -109,8 +116,8 @@ export function AdsListClient({ campaigns }: AdsListClientProps) {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <ul className="divide-y divide-border">
-            {filtered.map((c) => (
-              <AdRow key={c.id} campaign={c} />
+            {filtered.map((p) => (
+              <AdRow key={p.id} post={p} status={classify(p, now)} />
             ))}
           </ul>
         </div>
