@@ -10,6 +10,7 @@ import {
   Package,
   Settings,
   Store,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -39,8 +40,10 @@ export function SellerNavList({ onNavigate }: SellerNavListProps) {
     { href: "/seller", label: "Dashboard", icon: LayoutDashboard },
     { href: "/seller/products", label: "Products", icon: Package },
     { href: "/seller/ads", label: "Ads", icon: Megaphone },
+    { href: "/seller/followers", label: "Followers", icon: Users },
     { href: "/seller/inbox", label: "Inbox", icon: MessageCircle, badge: unreadConversations },
     { href: "/seller/transactions", label: "Transactions", icon: Wallet },
+    { href: "/seller/payouts", label: "Payouts", icon: Wallet },
     { href: "/seller/notifications", label: "Notifications", icon: Bell, badge: unreadNotifications },
     { href: "/seller/shop", label: "Shop settings", icon: Store },
     { href: "/seller/settings", label: "Settings", icon: Settings },

@@ -64,9 +64,8 @@ export function StoryViewer({
     };
   }, [stories.length, onClose]);
 
-  if (!story) return null;
-  const thumb =
-    story.media.type === "image" ? story.media.url : story.media.poster ?? "";
+  if (!story || !story.media) return null;
+  const isVideo = story.media.type === "video";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black animate-in fade-in duration-200">
@@ -109,10 +108,21 @@ export function StoryViewer({
       </header>
 
       <div className="relative flex-1">
-        {thumb && (
+        {isVideo ? (
+          <video
+            key={story.id}
+            src={story.media.url}
+            poster={story.media.type === "video" ? story.media.poster : undefined}
+            autoPlay
+            muted
+            playsInline
+            loop
+            className="absolute inset-0 h-full w-full object-contain animate-in fade-in duration-300"
+          />
+        ) : (
           <Image
             key={story.id}
-            src={thumb}
+            src={story.media.url}
             alt={story.caption ?? "Story"}
             fill
             sizes="100vw"

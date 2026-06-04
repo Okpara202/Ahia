@@ -7,6 +7,7 @@ import { disconnectSocket, getSocket } from "@/lib/socket";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationStore } from "@/store/notificationStore";
+import { usePresenceStore } from "@/store/presenceStore";
 import type {
   Invoice,
   InvoiceStatus,
@@ -41,6 +42,12 @@ interface MessageReactionChangedPayload {
 
 interface NotificationPayload {
   notification: Notification;
+}
+
+interface PresenceChangedPayload {
+  userId: string;
+  online: boolean;
+  lastSeenAt?: string;
 }
 
 interface InvoiceStatusOnlyPayload {
@@ -173,6 +180,17 @@ export function useSocket() {
       useNotificationStore.getState().add(p.notification);
     }
 
+    function onPresenceChanged(p: PresenceChangedPayload) {
+      usePresenceStore
+        .getState()
+        .setPresence(p.userId, p.online, p.lastSeenAt ?? null);
+    }
+
+    /** Heartbeat so backend's TTL doesn't expire while the tab is open. */
+    const heartbeatId = window.setInterval(() => {
+      socket.emit("heartbeat");
+    }, 20_000);
+
     /* ----- invoice events ----- */
 
     function onInvoiceCancelled(p: InvoiceStatusOnlyPayload) {
@@ -294,8 +312,10 @@ export function useSocket() {
     socket.on("invoice:line_extended", onLineExtended);
     socket.on("invoice:line_released", onLineReleasedByAdmin);
     socket.on("invoice:line_refunded", onLineRefunded);
+    socket.on("presence:changed", onPresenceChanged);
 
     return () => {
+      window.clearInterval(heartbeatId);
       socket.off("message:new", onMessage);
       socket.off("message:edited", onMessageEdited);
       socket.off("message:reaction_changed", onReactionChanged);
@@ -311,6 +331,7 @@ export function useSocket() {
       socket.off("invoice:line_extended", onLineExtended);
       socket.off("invoice:line_released", onLineReleasedByAdmin);
       socket.off("invoice:line_refunded", onLineRefunded);
+      socket.off("presence:changed", onPresenceChanged);
     };
   }, [isAuthed]);
 }

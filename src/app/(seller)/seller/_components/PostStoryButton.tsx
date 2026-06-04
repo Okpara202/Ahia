@@ -3,15 +3,19 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Check, Clock, Loader2, Sparkles, Upload, X } from "lucide-react";
+import { Check, Loader2, Sparkles, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/Input";
 import { Typography } from "@/components/Typography";
 import { extractApiError } from "@/lib/api";
+import { compressImageIfNeeded, formatBytes } from "@/lib/image";
 import { createStory } from "@/lib/services/stories";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toastStore";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 export function PostStoryButton() {
   const [open, setOpen] = useState(false);
@@ -37,8 +41,10 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [isVideo, setIsVideo] = useState(false);
   const [caption, setCaption] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
   const [posted, setPosted] = useState(false);
 
   useEffect(() => {
@@ -48,12 +54,61 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  function handleFile(e: ChangeEvent<HTMLInputElement>) {
+  // Release any blob URL we hold when the sheet unmounts.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  async function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files?.[0];
-    if (!picked) return;
-    setFile(picked);
-    setPreviewUrl(URL.createObjectURL(picked));
     e.target.value = "";
+    if (!picked) return;
+    const video = picked.type.startsWith("video/");
+
+    if (video) {
+      if (picked.size > MAX_VIDEO_BYTES) {
+        toast.error(
+          "Video is too large",
+          `${formatBytes(picked.size)} — please trim it to under ${formatBytes(
+            MAX_VIDEO_BYTES
+          )} and try again.`
+        );
+        return;
+      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setFile(picked);
+      setIsVideo(true);
+      setPreviewUrl(URL.createObjectURL(picked));
+      return;
+    }
+
+    setOptimizing(true);
+    try {
+      const result = await compressImageIfNeeded(picked);
+      if (result.file.size > MAX_IMAGE_BYTES) {
+        toast.error(
+          "Photo is too large",
+          `Even after optimizing, ${formatBytes(
+            result.file.size
+          )} is over the limit.`
+        );
+        return;
+      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setFile(result.file);
+      setIsVideo(false);
+      setPreviewUrl(URL.createObjectURL(result.file));
+    } catch (err) {
+      console.warn("[story-compress] failed", err);
+      toast.error(
+        "Couldn't read that file",
+        "Try a different photo or use JPEG/PNG."
+      );
+    } finally {
+      setOptimizing(false);
+    }
   }
 
   async function handlePost() {
@@ -73,7 +128,7 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const canPost = file !== null && !submitting;
+  const canPost = file !== null && !submitting && !optimizing;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -107,24 +162,36 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
           <>
             <div
               className={cn(
-                "relative aspect-[4/5] w-full overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted",
+                "relative mx-auto aspect-4/5 w-44 overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted sm:w-52",
                 previewUrl && "border-solid border-primary"
               )}
             >
               {previewUrl ? (
                 <>
-                  <Image
-                    src={previewUrl}
-                    alt="Story preview"
-                    fill
-                    sizes="400px"
-                    className="object-cover"
-                    unoptimized
-                  />
+                  {isVideo ? (
+                    <video
+                      src={previewUrl}
+                      muted
+                      playsInline
+                      autoPlay
+                      loop
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src={previewUrl}
+                      alt="Story preview"
+                      fill
+                      sizes="208px"
+                      className="object-cover"
+                      unoptimized
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-background/85 px-3 py-1.5 text-foreground backdrop-blur transition-colors hover:bg-background"
+                    disabled={optimizing}
+                    className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-background/85 px-3 py-1.5 text-foreground backdrop-blur transition-colors hover:bg-background disabled:opacity-50"
                   >
                     <Upload className="size-3.5" />
                     <Typography variant="label-sm">Replace</Typography>
@@ -134,21 +201,33 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="absolute inset-0 grid place-items-center gap-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  disabled={optimizing}
+                  className="absolute inset-0 grid place-items-center gap-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Upload className="size-6" />
-                  <Typography variant="label-md">Choose a photo</Typography>
-                  <Typography variant="caption">
-                    Portrait (4:5) recommended
+                  {optimizing ? (
+                    <Loader2 className="size-5 animate-spin" />
+                  ) : (
+                    <Upload className="size-5" />
+                  )}
+                  <Typography variant="label-sm">
+                    {optimizing ? "Optimizing…" : "Photo or video"}
                   </Typography>
                 </button>
               )}
             </div>
+            {file && (
+              <Typography
+                variant="caption"
+                className="text-center text-muted-foreground"
+              >
+                {formatBytes(file.size)} · {isVideo ? "video" : "photo"}
+              </Typography>
+            )}
 
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               className="hidden"
               onChange={handleFile}
             />
@@ -159,15 +238,8 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               maxLength={140}
-              helperText="Optional. Keep it short — stories live for 24 hours."
+              helperText="Optional. Stories live for 24 hours."
             />
-
-            <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3 text-muted-foreground">
-              <Clock className="size-4 shrink-0" />
-              <Typography variant="caption">
-                Stories auto-expire 24 hours after posting.
-              </Typography>
-            </div>
 
             <Button
               type="button"

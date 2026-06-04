@@ -9,6 +9,7 @@ import type { ChatPerspective } from "./ChatHeader";
 import { ImageMessageCard } from "./ImageMessageCard";
 import { InvoiceCard } from "./InvoiceCard";
 import { MessageBubble } from "./MessageBubble";
+import { StoryContextBlock } from "./StoryContextBlock";
 import { VoicePlayer } from "./VoicePlayer";
 
 interface MessageListProps {
@@ -63,6 +64,9 @@ export function MessageList({
                     mine={mine}
                   />
                 )}
+                {message.storyContext && (
+                  <StoryContextBlock context={message.storyContext} mine={mine} />
+                )}
                 <ImageMessageCard message={message} mine={mine} />
               </div>
             );
@@ -76,6 +80,9 @@ export function MessageList({
                     product={message.contextProduct}
                     mine={mine}
                   />
+                )}
+                {message.storyContext && (
+                  <StoryContextBlock context={message.storyContext} mine={mine} />
                 )}
                 <div className={mine ? "flex justify-end" : "flex justify-start"}>
                   <VoicePlayer
@@ -107,6 +114,9 @@ export function MessageList({
                   product={message.contextProduct}
                   mine={mine}
                 />
+              )}
+              {message.storyContext && (
+                <StoryContextBlock context={message.storyContext} mine={mine} />
               )}
               <MessageBubble
                 message={message}

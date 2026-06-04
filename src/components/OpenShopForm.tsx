@@ -71,6 +71,7 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
   const [handle, setHandle] = useState("");
   const [category, setCategory] = useState("Fashion");
   const [location, setLocation] = useState("Lagos");
+  const [customLocation, setCustomLocation] = useState("");
   const [bio, setBio] = useState("");
   const [showLegalName, setShowLegalName] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -153,11 +154,17 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
         }));
       }
 
+      // "Other" reveals a free-text input — send whatever the user typed.
+      // Skip if they left it blank.
+      const trimmedCustom = customLocation.trim();
+      const resolvedLocation =
+        location === "Other" ? trimmedCustom || undefined : location;
+
       const shop = await createShop({
         name: name.trim(),
         handle: handle.trim().toLowerCase(),
         category,
-        location: location === "Other" ? undefined : location,
+        location: resolvedLocation,
         bio: bio.trim() || undefined,
         showLegalName,
         avatarFile: avatar?.file,
@@ -332,9 +339,17 @@ export function OpenShopForm({ onCreated }: OpenShopFormProps) {
               </option>
             ))}
           </select>
+          {location === "Other" && (
+            <Input
+              placeholder="e.g. Uyo, Asaba, Akure"
+              value={customLocation}
+              onChange={(e) => setCustomLocation(e.target.value)}
+              aria-label="Custom location"
+            />
+          )}
           <Typography variant="caption" className="text-muted-foreground">
-            Helps buyers nearby find your shop. Pick &ldquo;Other&rdquo; to skip
-            for now.
+            Helps buyers nearby find your shop. Pick &ldquo;Other&rdquo; to type
+            a city not in the list, or leave blank to skip.
           </Typography>
         </div>
 

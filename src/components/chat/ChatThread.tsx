@@ -36,6 +36,7 @@ function emptyMessageBase(conversationId: string, senderId: string) {
     readAt: null,
     reactions: [],
     contextProduct: null,
+    storyContext: null,
   };
 }
 

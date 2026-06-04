@@ -15,6 +15,7 @@ import type {
   MessageContextProduct,
   MessageReaction,
   MessageType,
+  StoryContext,
 } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -86,6 +87,26 @@ function mapContextProduct(raw: unknown): MessageContextProduct | null {
   };
 }
 
+function mapStoryContext(raw: unknown): StoryContext | null {
+  if (raw === null || raw === undefined) return null;
+  const r = asObject(raw);
+  if (!r.storyId || !r.mediaUrl) return null;
+  const rawType = asString(r.mediaType, "image");
+  return {
+    storyId: asString(r.storyId),
+    mediaUrl: asString(r.mediaUrl),
+    mediaType: rawType === "video" ? "video" : "image",
+    posterUrl:
+      typeof r.posterUrl === "string" && r.posterUrl.length > 0
+        ? r.posterUrl
+        : undefined,
+    caption:
+      typeof r.caption === "string" && r.caption.length > 0
+        ? r.caption
+        : undefined,
+  };
+}
+
 function mapReactions(raw: unknown): MessageReaction[] {
   return asArray(raw)
     .map((item) => {
@@ -149,6 +170,7 @@ export function mapMessage(raw: unknown): Message {
     readAt: asNullableString(r.readAt),
     reactions: mapReactions(r.reactions),
     contextProduct: mapContextProduct(r.contextProduct),
+    storyContext: mapStoryContext(r.storyContext),
   };
 
   switch (type) {

@@ -4,6 +4,8 @@ import { PreferencesSection } from "@/components/PreferencesSection";
 import { Typography } from "@/components/Typography";
 import { useAuthStore } from "@/store/authStore";
 import { AccountDetailsForm } from "./AccountDetailsForm";
+import { ColdDMPreference } from "./ColdDMPreference";
+import { FollowingCard } from "./FollowingCard";
 import { ReferralSection } from "./ReferralSection";
 import { SignOutButton } from "./SignOutButton";
 
@@ -40,6 +42,10 @@ export function ProfileContent() {
       </section>
 
       <AccountDetailsForm user={user} />
+
+      <FollowingCard />
+
+      <ColdDMPreference />
 
       <ReferralSection
         code={user.name.split(" ")[0]?.toLowerCase() ?? user.id}

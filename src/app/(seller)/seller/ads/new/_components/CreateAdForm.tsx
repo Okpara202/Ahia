@@ -14,12 +14,20 @@ import {
   purchaseDiscoverCampaign,
   uploadDiscoverPost,
 } from "@/lib/services/discover";
+import { compressImageIfNeeded, formatBytes } from "@/lib/image";
 import { BOOST_PLANS } from "@/lib/mocks/boosts";
 import { formatNaira } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toastStore";
 import type { BoostPlanId, Product, Shop } from "@/types";
 import { ProductPicker } from "./ProductPicker";
+
+// Backend cap is 50 MB for Discover videos (per upload error code reference
+// FILE_TOO_LARGE). Reject client-side with a useful message instead of
+// burning the seller's upload budget on a request the server will refuse.
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+// Poster is a regular image — same 5 MB limit as product / shop avatar.
+const MAX_POSTER_BYTES = 5 * 1024 * 1024;
 
 interface CreateAdFormProps {
   products: Product[];
@@ -54,22 +62,59 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
 
   function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
+    e.target.value = "";
     if (!f) return;
+    if (f.size > MAX_VIDEO_BYTES) {
+      toast.error(
+        "Video is too large",
+        `${formatBytes(f.size)} — please trim it to under ${formatBytes(
+          MAX_VIDEO_BYTES
+        )} and try again. Most phones have a built-in trim tool.`
+      );
+      return;
+    }
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     setVideoFile(f);
     setVideoPreviewUrl(URL.createObjectURL(f));
-    e.target.value = "";
   }
 
   function pickPoster() {
     posterInputRef.current?.click();
   }
 
-  function handlePosterFile(e: ChangeEvent<HTMLInputElement>) {
+  async function handlePosterFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
-    if (!f) return;
-    setPosterFile(f);
-    setPosterPreviewUrl(URL.createObjectURL(f));
     e.target.value = "";
+    if (!f) return;
+    try {
+      const result = await compressImageIfNeeded(f);
+      if (result.file.size > MAX_POSTER_BYTES) {
+        toast.error(
+          "Poster is too large",
+          `Even after optimizing, ${formatBytes(
+            result.file.size
+          )} is over the limit.`
+        );
+        return;
+      }
+      if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
+      setPosterFile(result.file);
+      setPosterPreviewUrl(URL.createObjectURL(result.file));
+      if (result.compressed) {
+        toast.success(
+          "Optimized for faster upload",
+          `${formatBytes(result.originalBytes)} → ${formatBytes(
+            result.outputBytes
+          )}.`
+        );
+      }
+    } catch (err) {
+      console.warn("[ad-poster-compress] failed", err);
+      toast.error(
+        "Couldn't read that image",
+        "Try a different file or use JPEG/PNG."
+      );
+    }
   }
 
   function clearPoster() {
@@ -141,7 +186,7 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
 
         <div
           className={cn(
-            "relative aspect-9/16 w-full max-w-xs overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted",
+            "relative mx-auto aspect-9/16 w-44 overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted sm:w-52",
             videoPreviewUrl && "border-solid border-primary"
           )}
         >
@@ -173,11 +218,16 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
               <Video className="size-6" />
               <Typography variant="label-md">Choose a video</Typography>
               <Typography variant="caption">
-                Vertical, 9–30 seconds
+                Vertical, 9–30s, under {formatBytes(MAX_VIDEO_BYTES)}
               </Typography>
             </button>
           )}
         </div>
+        {videoFile && (
+          <Typography variant="caption" className="text-muted-foreground">
+            {formatBytes(videoFile.size)} · {videoFile.name}
+          </Typography>
+        )}
         <input
           ref={videoInputRef}
           type="file"
@@ -241,20 +291,11 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
       <section className="flex flex-col gap-3">
         <Typography variant="heading-h3">Pick a plan</Typography>
         <BoostPlanList planId={planId} onSelect={setPlanId} />
-      </section>
-
-      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
-        <Typography variant="caption" className="text-muted-foreground">
-          You&apos;ll pay
-        </Typography>
-        <Typography variant="display-md" className="text-foreground">
-          {formatNaira(chosen.priceNaira)}
-        </Typography>
         <Typography variant="caption" className="text-muted-foreground">
           Runs for {chosen.months} {chosen.months === 1 ? "month" : "months"}.
           Cancel anytime; no auto-renew.
         </Typography>
-      </div>
+      </section>
 
       <Button
         onClick={handleSubmit}

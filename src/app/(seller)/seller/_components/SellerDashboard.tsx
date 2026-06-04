@@ -16,6 +16,7 @@ import type { ConversationListItem, Transaction } from "@/types";
 import { DashboardStats } from "./DashboardStats";
 import { DisputeAlert } from "./DisputeAlert";
 import { EarningsMomentum } from "./EarningsMomentum";
+import { OwedBalanceTile } from "./OwedBalanceTile";
 import { PostStoryButton } from "./PostStoryButton";
 import { RecentConversations } from "./RecentConversations";
 import { RecentTransactions } from "./RecentTransactions";
@@ -93,6 +94,8 @@ export function SellerDashboard() {
       </header>
 
       {stats.openDisputes > 0 && <DisputeAlert count={stats.openDisputes} />}
+
+      <OwedBalanceTile />
 
       <EarningsMomentum stats={stats} />
 

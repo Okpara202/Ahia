@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
 import { useSellerShopStore } from "@/store/sellerShopStore";
 import { DeleteShopButton } from "./DeleteShopButton";
+import { PayoutAccountSection } from "./PayoutAccountSection";
 import { ShopForm } from "./ShopForm";
 
 export function ShopSettings() {
@@ -67,6 +68,8 @@ export function ShopSettings() {
       </section>
 
       <ShopForm shop={shop} />
+
+      <PayoutAccountSection />
 
       <section className="flex flex-col gap-3 rounded-2xl border border-destructive/20 bg-destructive/3 p-5">
         <Typography variant="heading-h4">Delete my shop</Typography>

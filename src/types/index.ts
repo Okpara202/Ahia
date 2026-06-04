@@ -51,6 +51,19 @@ export interface Story {
   createdAt: string;
   /** Optional product this story is about, linked to from the viewer. */
   productId?: string;
+  /** Total views. Owner-only field; 0 for non-owner reads. */
+  viewCount?: number;
+  /** Whether the signed-in viewer has already opened this story. False for
+   *  guests; the strip dims the ring when true. */
+  viewed?: boolean;
+}
+
+/** Embedded shop summary returned alongside `GET /stories/:id` so the SSR
+ *  permalink page can render OpenGraph meta in one fetch. */
+export interface StoryShopSummary {
+  name: string;
+  handle: string;
+  avatarUrl?: string;
 }
 
 export type Media =
@@ -169,6 +182,20 @@ export interface User {
   /** Cloudinary URL — set via PATCH /users/profile when supported. */
   avatarUrl?: string;
   createdAt: string;
+  /** Whether shops the user follows can start fresh conversations with them.
+   *  Default true. Toggle exposed in /profile. */
+  allowsColdDMs?: boolean;
+  /** Count of shops the user follows. Drives the "Following X shops" badge
+   *  in /profile and the buyer nav. */
+  followingCount?: number;
+  /** True when the user has a verified Paystack payout account on file.
+   *  Drives the reminder banner in the seller shell and the inline note on
+   *  /seller/transactions. */
+  hasPayoutAccount?: boolean;
+  /** Seller-only: kobo-precision decimal string of funds released to this
+   *  seller since the last daily payout sweep. Phase 7 (option C). Drives
+   *  the "Pending payout" card on /seller and the Cash out now button. */
+  owedBalance?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -226,6 +253,21 @@ export interface BaseMessage {
   reactions: MessageReaction[];
   /** Optional product context attached WhatsApp-reply-style at send time. */
   contextProduct: MessageContextProduct | null;
+  /** Optional story context — populated when the buyer replied to a story
+   *  inside the StoryViewer. Snapshotted server-side at send time so the
+   *  preview block keeps rendering after the story expires. */
+  storyContext: StoryContext | null;
+}
+
+/** Embedded story snapshot carried on a chat message. Same fields that the
+ *  original Story exposed at send time. Backend populates these server-side
+ *  (frontend sends only `storyId`). */
+export interface StoryContext {
+  storyId: string;
+  mediaUrl: string;
+  mediaType: "image" | "video";
+  posterUrl?: string;
+  caption?: string;
 }
 
 export interface TextMessage extends BaseMessage {
@@ -420,7 +462,13 @@ export type NotificationType =
   | "referral_completed"
   /** Fan-out to followers when a seller un-pauses (isActive: false → true).
    *  `data` carries `{ shopId, shopName, shopHandle }`. */
-  | "shop_reopened";
+  | "shop_reopened"
+  /** Fan-out to followers when a shop posts a new story. `data` carries
+   *  `{ shopId, shopHandle }`. Links to `/shops/:shopId`. */
+  | "story_posted"
+  /** Fired when funds are ready for release but the seller has no payout
+   *  account on file. `data` carries `{ transactionId, amount }`. */
+  | "payout_awaiting_account";
 
 export interface Notification {
   id: string;

@@ -9,6 +9,7 @@ import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Typography } from "@/components/Typography";
 import { cn } from "@/lib/utils";
+import { PayoutAccountBanner } from "./PayoutAccountBanner";
 import { SellerSidebarContents } from "./SellerSidebarContents";
 
 interface SellerShellProps {
@@ -102,7 +103,10 @@ export function SellerShell({
         </aside>
       </div>
 
-      <main className="md:pl-64">{children}</main>
+      <main className="md:pl-64">
+        <PayoutAccountBanner />
+        {children}
+      </main>
     </div>
   );
 }

@@ -25,6 +25,9 @@ export function StoriesStrip({ stories, shopName }: StoriesStripProps) {
         </Typography>
         <div className="flex gap-3 overflow-x-auto pb-1">
           {stories.map((story, i) => {
+            // Crash guard: backend currently ships stories without `media`.
+            // Skip until the canonical shape lands (see backend ask doc).
+            if (!story.media) return null;
             const thumb =
               story.media.type === "image"
                 ? story.media.url

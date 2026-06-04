@@ -54,6 +54,14 @@ const FALLBACK_LABELS: Record<
     title: "Shop reopened",
     body: "A shop you follow is back online.",
   },
+  story_posted: {
+    title: "New drop",
+    body: "A shop you follow just posted a new story.",
+  },
+  payout_awaiting_account: {
+    title: "Payout waiting",
+    body: "Add your payout account to receive funds that are ready to release.",
+  },
 };
 
 /** Pick the best title for a notification: backend-rendered if present,

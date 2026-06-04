@@ -9,7 +9,9 @@ import {
   Gift,
   Megaphone,
   ShieldCheck,
+  Sparkles,
   Store,
+  Wallet,
   X,
   Zap,
 } from "lucide-react";
@@ -38,6 +40,8 @@ const ICON_MAP: Record<NotificationType, LucideIcon> = {
   discover_campaign_started: Megaphone,
   referral_completed: Gift,
   shop_reopened: Store,
+  story_posted: Sparkles,
+  payout_awaiting_account: Wallet,
 };
 
 const TINT_MAP: Record<NotificationType, string> = {
@@ -52,6 +56,8 @@ const TINT_MAP: Record<NotificationType, string> = {
   discover_campaign_started: "bg-accent/15 text-accent",
   referral_completed: "bg-success/15 text-success",
   shop_reopened: "bg-primary/10 text-primary",
+  story_posted: "bg-accent/15 text-accent",
+  payout_awaiting_account: "bg-accent/15 text-accent",
 };
 
 export function NotificationItem({
