@@ -17,6 +17,10 @@ import {
 } from "@/components/ui/tooltip";
 import { Typography } from "@/components/Typography";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import {
+  recordDiscoverClick,
+  recordDiscoverImpression,
+} from "@/lib/services/discover";
 import { MY_SHOP } from "@/lib/mocks/seller";
 import { MOCK_SHOPS } from "@/lib/mocks/shops";
 import { cn } from "@/lib/utils";
@@ -35,6 +39,9 @@ export function DiscoverItem({ post, muted }: DiscoverItemProps) {
   const { id, video, caption, cta, sponsored } = post;
   const shop = ALL_SHOPS.find((s) => s.id === post.shopId);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Set once we've fired the impression beacon for this post so a
+  // user scrolling back to the same video doesn't double-count.
+  const impressionFiredRef = useRef(false);
   const [liked, setLiked] = useState(false);
   const requireAuth = useRequireAuth();
 
@@ -63,6 +70,14 @@ export function DiscoverItem({ post, muted }: DiscoverItemProps) {
       ([entry]) => {
         if (entry.intersectionRatio > 0.7) {
           v.play().catch(() => {});
+          // Fire the impression beacon the first time this post crosses
+          // the playback threshold. Backend should dedupe per session
+          // anyway, but guarding here avoids burst requests when the
+          // user scrolls back and forth.
+          if (!impressionFiredRef.current) {
+            impressionFiredRef.current = true;
+            recordDiscoverImpression(id);
+          }
         } else {
           v.pause();
           v.currentTime = 0;
@@ -72,7 +87,7 @@ export function DiscoverItem({ post, muted }: DiscoverItemProps) {
     );
     observer.observe(v);
     return () => observer.disconnect();
-  }, []);
+  }, [id]);
 
   return (
     <article className="relative h-full w-full snap-start snap-always overflow-hidden bg-black">
@@ -116,6 +131,7 @@ export function DiscoverItem({ post, muted }: DiscoverItemProps) {
           )}
           <Link
             href={ctaHref}
+            onClick={() => recordDiscoverClick(id)}
             className="inline-flex w-fit items-center gap-2 rounded-full bg-accent px-4 py-2 text-accent-foreground shadow-lg transition-transform hover:scale-105"
           >
             {cta.type === "product" ? (

@@ -18,7 +18,7 @@ export function AdPreviewCard({ post }: AdPreviewCardProps) {
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-      <div className="relative aspect-[9/16] w-full max-w-xs overflow-hidden rounded-xl bg-black">
+      <div className="relative mx-auto aspect-9/16 w-44 overflow-hidden rounded-xl bg-black sm:w-52">
         {post.video.poster && (
           <Image
             src={post.video.poster}
