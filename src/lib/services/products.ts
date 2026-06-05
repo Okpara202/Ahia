@@ -196,3 +196,28 @@ export async function updateProduct(
   );
   return mapProduct(data.product);
 }
+
+/**
+ * Toggle a product's `hidden` flag. "Hide" keeps the row + chat /
+ * transaction references intact but pulls it from feed/search/storefront
+ * per the BACKEND_HANDOFF.md §2 contract.
+ *
+ * Client-side call — see the createProduct note above for why we don't
+ * use a Server Action for cross-origin mutations.
+ */
+export async function setProductVisibility(
+  productId: string,
+  hidden: boolean
+): Promise<void> {
+  await apiClient().patch(`/products/${productId}/visibility`, { hidden });
+}
+
+/**
+ * Soft-delete a product. Backend sets `deleted_at` so disputes can still
+ * reference the listing. Client-side for the same reason as
+ * createProduct — Server Actions silently fail against a separate-host
+ * backend.
+ */
+export async function deleteProduct(productId: string): Promise<void> {
+  await apiClient().delete(`/products/${productId}`);
+}

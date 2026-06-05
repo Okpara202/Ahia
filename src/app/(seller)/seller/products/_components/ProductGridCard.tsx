@@ -20,7 +20,7 @@ import { formatNaira } from "@/lib/format";
 import {
   deleteProduct,
   setProductVisibility,
-} from "@/lib/actions/products";
+} from "@/lib/services/products";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toastStore";
 import type { Boost, Product } from "@/types";

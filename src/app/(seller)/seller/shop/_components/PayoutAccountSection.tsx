@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Trash2, Wallet } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  CheckCircle2,
+  ChevronsUpDown,
+  Loader2,
+  Search,
+  Trash2,
+  Wallet,
+  X,
+} from "lucide-react";
 
 import { Input } from "@/components/Input";
 import { Button } from "@/components/ui/button";
@@ -18,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Typography } from "@/components/Typography";
 import { extractApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   deleteMyPayoutAccount,
   getBanks,
@@ -58,7 +68,18 @@ export function PayoutAccountSection() {
     Promise.all([getBanks(), getMyPayoutAccount()])
       .then(([b, a]) => {
         if (cancelled) return;
-        setBanks(b);
+        // Paystack's bank list legitimately contains duplicate `code`
+        // values — multiple OPay / fintech subsidiaries share the same
+        // NIBSS sort code. Dedupe by code (keep first) so React keys are
+        // unique AND the dropdown isn't visually confusing for sellers.
+        const seen = new Set<string>();
+        const deduped: Bank[] = [];
+        for (const bank of b) {
+          if (seen.has(bank.code)) continue;
+          seen.add(bank.code);
+          deduped.push(bank);
+        }
+        setBanks(deduped);
         setExisting(a);
         if (a) {
           setBankCode(a.bankCode);
@@ -98,14 +119,37 @@ export function PayoutAccountSection() {
     resolveAccount(bankCode, accountNumber)
       .then((r) => {
         if (cancelled) return;
+        if (!r.accountName) {
+          // Backend returned 200 but no name — treat as verification failure
+          // so the seller doesn't end up saving a blank.
+          setResolveError(
+            "Bank didn't return a name for that number. Double-check the digits."
+          );
+          setAccountName("");
+          return;
+        }
         setAccountName(r.accountName);
         setResolveError(null);
       })
       .catch((err) => {
         if (cancelled) return;
-        const msg =
-          extractApiError(err)?.message ??
+        const apiErr = extractApiError(err);
+        // Surface details to the console — verification regressions are
+        // hard to diagnose without seeing the actual backend response.
+        console.warn("[payout-resolve] failed", {
+          bankCode,
+          status:
+            err && typeof err === "object" && "response" in err
+              ? (err as { response?: { status?: number } }).response?.status
+              : undefined,
+          apiErr,
+        });
+        const baseMsg =
+          apiErr?.message ??
           "Couldn't verify that account. Double-check the number.";
+        const msg = apiErr?.requestId
+          ? `${baseMsg} (ID: ${apiErr.requestId})`
+          : baseMsg;
         setResolveError(msg);
         setAccountName("");
       })
@@ -286,20 +330,11 @@ function EditorView({
         <Typography variant="label-sm" as="span">
           Bank
         </Typography>
-        <select
+        <BankPicker
+          banks={banks}
           value={bankCode}
-          onChange={(e) => onBankChange(e.target.value)}
-          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none scheme-light focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 dark:scheme-dark"
-        >
-          <option value="" className="bg-background text-foreground">
-            Choose your bank…
-          </option>
-          {banks.map((b) => (
-            <option key={b.code} value={b.code} className="bg-background text-foreground">
-              {b.name}
-            </option>
-          ))}
-        </select>
+          onChange={onBankChange}
+        />
         {banks.length === 0 && (
           <Typography variant="caption" className="text-muted-foreground">
             Bank list loading. If it stays empty, refresh in a moment.
@@ -352,6 +387,151 @@ function EditorView({
         {saving && <Loader2 className="size-4 animate-spin" />}
         {saving ? "Saving…" : "Save account"}
       </Button>
+    </div>
+  );
+}
+
+interface BankPickerProps {
+  banks: Bank[];
+  value: string;
+  onChange: (code: string) => void;
+}
+
+/**
+ * Searchable bank dropdown. Native `<select>` is dreadful UX with ~30+
+ * Nigerian banks — sellers scroll forever. This shows a trigger button
+ * with the selected name, opens a panel with a search input + filtered
+ * list, and closes on selection or click-outside.
+ */
+function BankPicker({ banks, value, onChange }: BankPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = banks.find((b) => b.code === value);
+
+  // Close on click outside the picker.
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  // Auto-focus the search input on open.
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return banks;
+    return banks.filter((b) => b.name.toLowerCase().includes(q));
+  }, [banks, query]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={banks.length === 0}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={cn(
+          "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none transition-colors",
+          "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40",
+          banks.length === 0 && "cursor-not-allowed opacity-60"
+        )}
+      >
+        <span
+          className={cn(
+            "truncate",
+            !selected && "text-muted-foreground"
+          )}
+        >
+          {selected?.name ?? "Choose your bank…"}
+        </span>
+        <ChevronsUpDown
+          aria-hidden
+          className="size-3.5 shrink-0 text-muted-foreground"
+        />
+      </button>
+
+      {open && (
+        <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <Search aria-hidden className="size-3.5 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search banks…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="grid size-5 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="px-3 py-6 text-center">
+              <Typography variant="caption" className="text-muted-foreground">
+                No banks match &ldquo;{query}&rdquo;.
+              </Typography>
+            </div>
+          ) : (
+            <ul
+              role="listbox"
+              className="max-h-64 overflow-y-auto py-1"
+            >
+              {filtered.map((b) => {
+                const active = b.code === value;
+                return (
+                  <li key={b.code}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        onChange(b.code);
+                        setQuery("");
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
+                        active && "bg-primary/8 text-primary"
+                      )}
+                    >
+                      <Check
+                        aria-hidden
+                        className={cn(
+                          "size-3.5 shrink-0",
+                          active ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <span className="truncate">{b.name}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

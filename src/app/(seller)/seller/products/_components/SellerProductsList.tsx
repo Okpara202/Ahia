@@ -51,12 +51,14 @@ export function SellerProductsList({ products, boosts }: SellerProductsListProps
   }, [visibleProducts, query, category]);
 
   function handleDelete(id: string) {
+    // Backend DELETE already fired by the child (ProductGridCard) before
+    // calling this callback — we just hide the row from the local list
+    // so the grid updates without a hard refresh.
     setDeletedIds((prev) => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
-    // TODO: DELETE /products/:id once backend lands.
   }
 
   if (visibleProducts.length === 0) {
