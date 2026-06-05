@@ -69,10 +69,15 @@ export function UploadOverlay({
         </span>
       </div>
 
-      <div className="flex flex-col items-center gap-1">
-        <Typography variant="heading-h3">{title}</Typography>
+      <div className="flex max-w-xs flex-col items-center gap-1 px-4 text-center sm:max-w-md">
+        <Typography variant="heading-h3" className="text-center">
+          {title}
+        </Typography>
         {hint && (
-          <Typography variant="body-sm" className="text-muted-foreground">
+          <Typography
+            variant="body-sm"
+            className="text-center text-muted-foreground"
+          >
             {hint}
           </Typography>
         )}
