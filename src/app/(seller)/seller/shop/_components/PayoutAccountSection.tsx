@@ -68,15 +68,17 @@ export function PayoutAccountSection() {
     Promise.all([getBanks(), getMyPayoutAccount()])
       .then(([b, a]) => {
         if (cancelled) return;
-        // Paystack's bank list legitimately contains duplicate `code`
-        // values — multiple OPay / fintech subsidiaries share the same
-        // NIBSS sort code. Dedupe by code (keep first) so React keys are
-        // unique AND the dropdown isn't visually confusing for sellers.
+        // Paystack's bank list intentionally returns multiple variants
+        // per fintech (OPay, Paycom, etc.) — different NUBANs route
+        // through different variants. Drop EXACT (code+name) duplicates
+        // but keep same-code-different-name variants so the seller can
+        // pick the one that matches their account.
         const seen = new Set<string>();
         const deduped: Bank[] = [];
         for (const bank of b) {
-          if (seen.has(bank.code)) continue;
-          seen.add(bank.code);
+          const key = `${bank.code}::${bank.name}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
           deduped.push(bank);
         }
         setBanks(deduped);
@@ -144,9 +146,14 @@ export function PayoutAccountSection() {
               : undefined,
           apiErr,
         });
-        const baseMsg =
-          apiErr?.message ??
-          "Couldn't verify that account. Double-check the number.";
+        // For invalid_account, the most common cause in NG is the seller
+        // picked a fintech (OPay, Paycom, Moniepoint, Kuda) variant that
+        // doesn't match their actual account. Steer them at the fix.
+        const isInvalidAccount = apiErr?.code === "invalid_account";
+        const baseMsg = isInvalidAccount
+          ? "Bank couldn't find that account. If your bank has multiple options in the list (e.g. several OPay or Moniepoint variants), try a different one."
+          : apiErr?.message ??
+            "Couldn't verify that account. Double-check the number.";
         const msg = apiErr?.requestId
           ? `${baseMsg} (ID: ${apiErr.requestId})`
           : baseMsg;
@@ -498,10 +505,10 @@ function BankPicker({ banks, value, onChange }: BankPickerProps) {
               role="listbox"
               className="max-h-64 overflow-y-auto py-1"
             >
-              {filtered.map((b) => {
+              {filtered.map((b, idx) => {
                 const active = b.code === value;
                 return (
-                  <li key={b.code}>
+                  <li key={`${b.code}-${b.name}-${idx}`}>
                     <button
                       type="button"
                       role="option"
