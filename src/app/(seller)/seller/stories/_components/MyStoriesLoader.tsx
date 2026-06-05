@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/PageLoader";
 import { Typography } from "@/components/Typography";
+import { extractApiError } from "@/lib/api";
 import { deleteStory, getMyStories } from "@/lib/services/stories";
 import { toast } from "@/store/toastStore";
 import type { Story } from "@/types";
@@ -38,10 +39,19 @@ export function MyStoriesLoader() {
     getMyStories()
       .then((s) => {
         if (cancelled) return;
+        // Log what backend returned so empty-state debugging is possible
+        // from the browser alone — no Render-log dive required.
+        console.info("[my-stories] loaded", { count: s.length, stories: s });
         setStories(s);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
+        const apiErr = extractApiError(err);
+        const status =
+          err && typeof err === "object" && "response" in err
+            ? (err as { response?: { status?: number } }).response?.status
+            : undefined;
+        console.warn("[my-stories] fetch failed", { status, apiErr });
         setStories([]);
       });
     return () => {

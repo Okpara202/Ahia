@@ -3,15 +3,61 @@ import axios from "axios";
 import { apiClient, getApi } from "@/lib/api";
 import type { Media, Story } from "@/types";
 
+/**
+ * Build the Media discriminated union from backend's response. Tolerates
+ * both shapes:
+ *   - nested:  `media: { type, url, poster? }` (what the buyer-side
+ *              /shops/:id/stories returns and what works today)
+ *   - flat:    `mediaType: "image"|"video", mediaUrl, posterUrl?`
+ *              or the looser `videoUrl|imageUrl, posterUrl?` variant
+ *              (what some endpoints in v2 started using)
+ *
+ * Returns `null` when nothing parseable is present so the caller can
+ * decide what to do (StoryCard renders a sparkle placeholder).
+ */
+function deriveStoryMedia(r: Record<string, unknown>): Media | null {
+  const nested = r.media as Media | undefined;
+  if (
+    nested &&
+    typeof nested === "object" &&
+    "type" in nested &&
+    "url" in nested
+  ) {
+    return nested;
+  }
+  const explicitType = r.mediaType === "video" ? "video" : r.mediaType === "image" ? "image" : null;
+  const url =
+    (typeof r.mediaUrl === "string" && r.mediaUrl) ||
+    (typeof r.videoUrl === "string" && r.videoUrl) ||
+    (typeof r.imageUrl === "string" && r.imageUrl) ||
+    "";
+  if (!url) return null;
+  const poster =
+    typeof r.posterUrl === "string" && r.posterUrl ? r.posterUrl : undefined;
+  // If we have a video URL OR explicit video type → video. Otherwise image.
+  const type =
+    explicitType ?? (typeof r.videoUrl === "string" ? "video" : "image");
+  return type === "video"
+    ? { type: "video", url, poster }
+    : { type: "image", url };
+}
+
 function mapStory(raw: unknown): Story {
   const r = raw as Record<string, unknown>;
+  const media = deriveStoryMedia(r);
   return {
     id: String(r.id),
     shopId: String(r.shopId ?? ""),
-    media: r.media as Media,
+    // The cast keeps the type Media (not Media | null) for downstream
+    // consumers; the StoryCard / StoryViewer code already guards on
+    // `if (!story.media) return null` so this stays safe.
+    media: (media ?? undefined) as Media,
     caption: (r.caption as string | undefined) ?? undefined,
     createdAt: String(r.createdAt ?? new Date().toISOString()),
     productId: (r.productId as string | undefined) ?? undefined,
+    viewCount:
+      typeof r.viewCount === "number" ? r.viewCount : undefined,
+    viewed: typeof r.viewed === "boolean" ? r.viewed : undefined,
   };
 }
 
