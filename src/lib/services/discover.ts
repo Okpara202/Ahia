@@ -234,9 +234,11 @@ export async function uploadDiscoverPost(
   fd.append("video", args.videoFile);
   if (args.posterFile) fd.append("poster", args.posterFile);
   if (args.caption) fd.append("caption", args.caption);
-  fd.append("cta_type", args.cta.type);
+  // Backend v2 expects camelCase here — confirmed via VALIDATION_FAILED
+  // when sent as snake_case (`cta_type` / `cta_id`).
+  fd.append("ctaType", args.cta.type);
   fd.append(
-    "cta_id",
+    "ctaTargetId",
     args.cta.type === "product" ? args.cta.productId : args.cta.shopId
   );
   fd.append("intent", args.intent);

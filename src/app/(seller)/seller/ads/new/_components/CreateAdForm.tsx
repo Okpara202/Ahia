@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import { ShieldCheck, Upload, Video, X } from "lucide-react";
 
 import { BoostPlanList } from "@/app/(seller)/seller/products/_components/BoostPlanList";
@@ -159,6 +160,38 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
       window.location.href = authorization_url;
     } catch (err) {
       const apiErr = extractApiError(err);
+      // Dump everything we can about the failure so a 400 from backend
+      // is debuggable from the browser console alone — no Render-log dive.
+      const debug: Record<string, unknown> = { apiErr, mode };
+      if (axios.isAxiosError(err)) {
+        debug.status = err.response?.status;
+        debug.statusText = err.response?.statusText;
+        debug.responseBody = err.response?.data;
+        debug.requestUrl = err.config?.url;
+        debug.requestMethod = err.config?.method;
+        // Stringify the FormData so we can see what was actually shipped.
+        const fdSummary: Record<string, string | string[]> = {};
+        for (const [k, v] of (
+          err.config?.data instanceof FormData
+            ? err.config.data
+            : new FormData()
+        ).entries()) {
+          const display =
+            v instanceof File
+              ? `<File name="${v.name}" size=${v.size} type="${v.type}">`
+              : String(v);
+          const existing = fdSummary[k];
+          if (existing === undefined) {
+            fdSummary[k] = display;
+          } else if (Array.isArray(existing)) {
+            existing.push(display);
+          } else {
+            fdSummary[k] = [existing, display];
+          }
+        }
+        debug.requestPayload = fdSummary;
+      }
+      console.warn("[discover-post] failed", debug);
       if (apiErr?.code === "free_discover_limit") {
         toast.error(
           "Free post limit hit",
@@ -405,23 +438,23 @@ function ModeCard({
       onClick={onClick}
       className={
         active
-          ? "relative flex flex-col gap-1 rounded-2xl border-2 border-primary bg-primary/4 p-4 text-left"
-          : "relative flex flex-col gap-1 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/40"
+          ? "relative flex flex-col gap-1 overflow-hidden rounded-2xl border-2 border-primary bg-primary/4 p-4 text-left"
+          : "relative flex flex-col gap-1 overflow-hidden rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/40"
       }
     >
-      <div className="flex items-center gap-2">
-        <Typography variant="label-lg">{label}</Typography>
-        {recommended && (
-          <span className="rounded-full bg-accent/15 px-2 py-0.5">
-            <Typography
-              variant="caption"
-              className="font-semibold text-accent"
-            >
-              Recommended
-            </Typography>
-          </span>
-        )}
-      </div>
+      {recommended && (
+        <span className="absolute right-2 top-2 inline-flex shrink-0 items-center rounded-full bg-accent/15 px-2 py-0.5">
+          <Typography
+            variant="caption"
+            className="text-[10px] font-semibold text-accent"
+          >
+            Recommended
+          </Typography>
+        </span>
+      )}
+      <Typography variant="label-lg" className={recommended ? "pr-24" : undefined}>
+        {label}
+      </Typography>
       <Typography variant="caption" className="text-muted-foreground">
         {hint}
       </Typography>
