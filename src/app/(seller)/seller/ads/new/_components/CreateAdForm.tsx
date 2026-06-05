@@ -10,6 +10,7 @@ import { BoostPlanList } from "@/app/(seller)/seller/products/_components/BoostP
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/Textarea";
 import { Typography } from "@/components/Typography";
+import { UploadOverlay } from "@/components/UploadOverlay";
 import { extractApiError } from "@/lib/api";
 import {
   purchaseDiscoverCampaign,
@@ -54,6 +55,9 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
   const [mode, setMode] = useState<Mode>("boost");
   const [planId, setPlanId] = useState<BoostPlanId>("monthly");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | undefined>(
+    undefined
+  );
 
   const chosen = BOOST_PLANS.find((p) => p.id === planId) ?? BOOST_PLANS[0];
   const valid =
@@ -130,6 +134,7 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
   async function handleSubmit() {
     if (!valid || !videoFile) return;
     setSubmitting(true);
+    setUploadPercent(0);
     try {
       const post = await uploadDiscoverPost({
         videoFile,
@@ -140,7 +145,12 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
             ? { type: "product", productId }
             : { type: "shop", shopId: shop.id },
         intent: mode,
+        onProgress: setUploadPercent,
       });
+      // Once the upload finishes the bar flips to indeterminate while
+      // backend uploads to Cloudinary + persists. Tells the user "still
+      // working" without claiming false specificity.
+      setUploadPercent(undefined);
       if (mode === "free") {
         // Free path: post is live in the organic mix immediately. Drop the
         // seller at the analytics page where they can boost later.
@@ -202,12 +212,19 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
         toast.fromApiError("Couldn't create the post", err);
       }
       setSubmitting(false);
+      setUploadPercent(undefined);
       router.refresh();
     }
   }
 
   return (
     <div className="flex flex-col gap-8">
+      <UploadOverlay
+        open={submitting}
+        progress={uploadPercent}
+        title={mode === "free" ? "Posting to Discover…" : "Uploading your ad…"}
+        hint="Keep this tab open — we'll let you know when it's done."
+      />
       <section className="flex flex-col gap-3">
         <Typography variant="heading-h3">
           What does the ad send buyers to?
@@ -476,7 +493,7 @@ function TargetCard({ active, onClick, label, hint }: TargetCardProps) {
       onClick={onClick}
       className={
         active
-          ? "flex flex-col gap-1 rounded-2xl border-2 border-primary bg-primary/[0.04] p-4 text-left"
+          ? "flex flex-col gap-1 rounded-2xl border-2 border-primary bg-primary/4 p-4 text-left"
           : "flex flex-col gap-1 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/40"
       }
     >

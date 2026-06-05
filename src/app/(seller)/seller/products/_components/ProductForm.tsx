@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/Input";
 import { Textarea } from "@/components/Textarea";
 import { Typography } from "@/components/Typography";
+import { UploadOverlay } from "@/components/UploadOverlay";
 import { extractApiError } from "@/lib/api";
 import { createProduct, updateProduct } from "@/lib/services/products";
 import { toast } from "@/store/toastStore";
@@ -54,6 +55,9 @@ export function ProductForm({ initial, mode }: ProductFormProps) {
   const [description, setDescription] = useState(initial?.description ?? "");
   const [items, setItems] = useState<ProductImageItem[]>(initialItems(initial));
   const [saving, setSaving] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | undefined>(
+    undefined
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const canSave = !!name.trim() && !!price.trim() && items.length > 0 && !saving;
@@ -80,14 +84,16 @@ export function ProductForm({ initial, mode }: ProductFormProps) {
 
   async function handleSave() {
     setSaving(true);
+    setUploadPercent(0);
     setFieldErrors({});
     try {
       const fd = buildFormData();
       if (mode === "edit" && initial) {
-        await updateProduct(initial.id, fd);
+        await updateProduct(initial.id, fd, setUploadPercent);
       } else {
-        await createProduct(fd);
+        await createProduct(fd, setUploadPercent);
       }
+      setUploadPercent(undefined);
       toast.success(
         mode === "edit" ? "Product updated" : "Product published"
       );
@@ -137,11 +143,18 @@ export function ProductForm({ initial, mode }: ProductFormProps) {
         );
       }
       setSaving(false);
+      setUploadPercent(undefined);
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
+      <UploadOverlay
+        open={saving}
+        progress={uploadPercent}
+        title={mode === "edit" ? "Saving your changes…" : "Publishing your product…"}
+        hint="Keep this tab open — we'll let you know when it's done."
+      />
       <Input
         label="Product name"
         placeholder="e.g. Vintage silk slip dress — size 8"

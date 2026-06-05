@@ -174,10 +174,21 @@ export async function searchProducts(
  * `FormData` rides the request directly — Next.js Server Actions strip the
  * stream when forwarding to a separate backend.
  */
-export async function createProduct(form: FormData): Promise<Product> {
+export async function createProduct(
+  form: FormData,
+  onProgress?: (percent: number) => void
+): Promise<Product> {
   const { data } = await apiClient().post<{ product: unknown }>(
     "/products",
-    form
+    form,
+    onProgress
+      ? {
+          onUploadProgress: (e) => {
+            if (!e.total) return;
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          },
+        }
+      : undefined
   );
   return mapProduct(data.product);
 }
@@ -188,11 +199,20 @@ export async function createProduct(form: FormData): Promise<Product> {
  */
 export async function updateProduct(
   productId: string,
-  form: FormData
+  form: FormData,
+  onProgress?: (percent: number) => void
 ): Promise<Product> {
   const { data } = await apiClient().patch<{ product: unknown }>(
     `/products/${productId}`,
-    form
+    form,
+    onProgress
+      ? {
+          onUploadProgress: (e) => {
+            if (!e.total) return;
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          },
+        }
+      : undefined
   );
   return mapProduct(data.product);
 }

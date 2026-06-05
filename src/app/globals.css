@@ -179,3 +179,15 @@
     transform: scale(1.18);
   }
 }
+
+/* Indeterminate progress sweep for UploadOverlay. The bar segment slides
+   across the track left-to-right and loops; reads as "active, working"
+   without claiming false specificity about how far along we are. */
+@keyframes ahia-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}

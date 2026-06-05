@@ -83,6 +83,9 @@ interface CreateStoryArgs {
   caption?: string;
   productId?: string;
   durationMs?: number;
+  /** Optional callback wired into Axios `onUploadProgress`. Receives the
+   *  current % (0–100). Use to drive UploadOverlay. */
+  onProgress?: (percent: number) => void;
 }
 
 /**
@@ -99,7 +102,15 @@ export async function createStory(args: CreateStoryArgs): Promise<Story> {
   if (args.durationMs) fd.append("duration_ms", String(args.durationMs));
   const { data } = await apiClient().post<{ story: unknown }>(
     "/shops/me/stories",
-    fd
+    fd,
+    args.onProgress
+      ? {
+          onUploadProgress: (e) => {
+            if (!e.total) return;
+            args.onProgress!(Math.round((e.loaded / e.total) * 100));
+          },
+        }
+      : undefined
   );
   return mapStory(data.story);
 }

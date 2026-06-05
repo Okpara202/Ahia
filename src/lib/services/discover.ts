@@ -219,6 +219,9 @@ interface UploadDiscoverPostArgs {
    *  "boost" → uncapped; caller chains `purchaseDiscoverCampaign` after.
    *  Backend enforces the cap server-side based on this flag. */
   intent: "free" | "boost";
+  /** Optional callback wired into Axios `onUploadProgress`. Receives the
+   *  current % (0–100). Use to drive UploadOverlay. */
+  onProgress?: (percent: number) => void;
 }
 
 /**
@@ -244,7 +247,15 @@ export async function uploadDiscoverPost(
   fd.append("intent", args.intent);
   const { data } = await apiClient().post<{ post: unknown }>(
     "/discover/posts",
-    fd
+    fd,
+    args.onProgress
+      ? {
+          onUploadProgress: (e) => {
+            if (!e.total) return;
+            args.onProgress!(Math.round((e.loaded / e.total) * 100));
+          },
+        }
+      : undefined
   );
   return mapDiscoverPost(data.post);
 }

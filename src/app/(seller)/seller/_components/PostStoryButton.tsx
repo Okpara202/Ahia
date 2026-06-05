@@ -8,6 +8,7 @@ import { Check, Loader2, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/Input";
 import { Typography } from "@/components/Typography";
+import { UploadOverlay } from "@/components/UploadOverlay";
 import { compressImageIfNeeded, formatBytes } from "@/lib/image";
 import { createStory } from "@/lib/services/stories";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,9 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
   const [isVideo, setIsVideo] = useState(false);
   const [caption, setCaption] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | undefined>(
+    undefined
+  );
   const [optimizing, setOptimizing] = useState(false);
   const [posted, setPosted] = useState(false);
 
@@ -113,18 +117,22 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
   async function handlePost() {
     if (!file) return;
     setSubmitting(true);
+    setUploadPercent(0);
     try {
       await createStory({
         file,
         isVideo,
         caption: caption.trim() || undefined,
+        onProgress: setUploadPercent,
       });
+      setUploadPercent(undefined);
       setPosted(true);
       toast.success("Story posted", "It expires in 24 hours.");
       router.refresh();
     } catch (err) {
       toast.fromApiError("Couldn't post", err);
       setSubmitting(false);
+      setUploadPercent(undefined);
     }
   }
 
@@ -132,6 +140,12 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <UploadOverlay
+        open={submitting}
+        progress={uploadPercent}
+        title={isVideo ? "Uploading your video…" : "Posting your story…"}
+        hint="Keep this tab open — we'll let you know when it's done."
+      />
       <button
         type="button"
         aria-label="Close"
