@@ -30,6 +30,7 @@ import type {
 import { AdAnalyticsChart } from "./AdAnalyticsChart";
 import { AdPreviewCard } from "./AdPreviewCard";
 import { BoostExistingPostButton } from "./BoostExistingPostButton";
+import { DeletePostButton } from "./DeletePostButton";
 import { EditPostControls } from "./EditPostControls";
 
 interface AdAnalyticsLoaderProps {
@@ -215,6 +216,8 @@ function Loaded({ post, campaign, daily }: LoadedData) {
           editsRemaining={post.editsRemaining ?? 0}
         />
       )}
+
+      <DeletePostButton postId={post.id} status={lifecycle} />
     </div>
   );
 }

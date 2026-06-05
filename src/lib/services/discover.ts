@@ -322,6 +322,17 @@ export async function getMyDiscoverPosts(
   }
 }
 
+/**
+ * Permanently remove a Discover post the seller owns. Backend soft-deletes
+ * (per the standard pattern) so any in-flight clicks/saves still resolve
+ * to a sane 404. Boosted posts: backend cancels the campaign on delete —
+ * no refund is automatic (seller-initiated removal). Free posts: just
+ * removed from the rotation.
+ */
+export async function deleteDiscoverPost(postId: string): Promise<void> {
+  await apiClient().delete(`/discover/posts/${postId}`);
+}
+
 interface PurchaseCampaignResponse {
   authorization_url: string;
   reference: string;
