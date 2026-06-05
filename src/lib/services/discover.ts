@@ -160,16 +160,30 @@ export async function getDiscoverAdAnalytics(campaignId: string): Promise<{
 
 /**
  * Fetch a single Discover post by id. Backend's v2 deploy doc doesn't
- * list a `GET /discover/posts/:id` endpoint, so we list-and-filter
- * against the seller's own posts. Wasteful for many-post sellers, but
- * the list is typically <50 items — acceptable for v2. Switch to a
- * direct GET when backend ships one.
+ * list a `GET /discover/posts/:id` endpoint, so we list-and-paginate
+ * the seller's own posts until we find it. Typical sellers have <12
+ * posts so this terminates on page 1. Switch to a direct GET when
+ * backend ships one (queued in memory next_backend_handoff).
+ *
+ * We don't pass `limit` — backend's default is fine, and earlier we
+ * tripped a `VALIDATION_FAILED` when overriding it with a value above
+ * backend's cap. Pagination is robust against any cap.
  */
 export async function getDiscoverPostById(
   postId: string
 ): Promise<DiscoverPost | null> {
-  const page = await getMyDiscoverPosts({ limit: 100 });
-  return page.items.find((p) => p.id === postId) ?? null;
+  let cursor: string | null = null;
+  // Safety cap: 10 pages × backend default page size is comfortably above
+  // any realistic seller's post count, and stops a runaway loop if the
+  // backend ever returns a nextCursor that never resolves to empty.
+  for (let i = 0; i < 10; i++) {
+    const page = await getMyDiscoverPosts({ cursor });
+    const found = page.items.find((p) => p.id === postId);
+    if (found) return found;
+    if (!page.nextCursor) return null;
+    cursor = page.nextCursor;
+  }
+  return null;
 }
 
 /**
