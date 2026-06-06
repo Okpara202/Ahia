@@ -52,6 +52,9 @@ export function EditPostControls({
     setSavingCaption(true);
     try {
       await editDiscoverPost(postId, { caption: caption.trim() });
+      // router.refresh() re-renders the parent but doesn't unmount this
+      // component, so local state persists. Clear the spinner ourselves.
+      setSavingCaption(false);
       toast.success(
         "Caption updated",
         `${editsRemaining - 1} edit${editsRemaining - 1 === 1 ? "" : "s"} left.`
@@ -96,6 +99,7 @@ export function EditPostControls({
         return;
       }
       await editDiscoverPost(postId, { posterFile: result.file });
+      setSavingPoster(false);
       toast.success(
         "Poster replaced",
         `${editsRemaining - 1} edit${editsRemaining - 1 === 1 ? "" : "s"} left.`
