@@ -42,3 +42,7 @@ next-env.d.ts
 
 # private handoff doc — keep local until shared with backend team
 BACKEND_HANDOFF.md
+
+# admin app API contract reference — internal reference, not part of the
+# user-app codebase. Keep locally so we can grep it during development.
+ADMIN_API_REFERENCE.md
