@@ -5,6 +5,7 @@ import { ShieldCheck, X, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
+import { extractApiError } from "@/lib/api";
 import { buyBoost } from "@/lib/services/boosts";
 import { BOOST_PLANS } from "@/lib/mocks/boosts";
 import { formatNaira } from "@/lib/format";
@@ -63,14 +64,25 @@ export function BoostSheet({ product, open, onClose }: BoostSheetProps) {
     setSubmitting(true);
     try {
       const callbackUrl = `${window.location.origin}/payments/return`;
+      const idempotencyKey = crypto.randomUUID();
       const { authorizationUrl } = await buyBoost({
         productId: product.id,
         planId,
         callbackUrl,
+        idempotencyKey,
       });
       window.location.href = authorizationUrl;
     } catch (err) {
-      toast.fromApiError("Couldn't open Paystack", err);
+      const apiErr = extractApiError(err);
+      if (apiErr?.code === "duplicate_request") {
+        toast.info(
+          "Boost already in progress",
+          "We received your earlier request. If Paystack doesn't open, refresh and try again.",
+          apiErr.requestId
+        );
+      } else {
+        toast.fromApiError("Couldn't open Paystack", err);
+      }
       setSubmitting(false);
     }
   }

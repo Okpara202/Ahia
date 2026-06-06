@@ -22,6 +22,7 @@ import {
   confirmInvoiceLine,
   payInvoice,
 } from "@/lib/services/conversations";
+import { extractApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/chatStore";
 import { toast } from "@/store/toastStore";
@@ -104,10 +105,27 @@ export function InvoiceCard({ message, isBuyer, mine }: InvoiceCardProps) {
         typeof window !== "undefined"
           ? `${window.location.origin}/payments/return`
           : undefined;
-      const { authorizationUrl } = await payInvoice(invoice.id, callbackUrl);
+      // Fresh UUID per click = fresh payment intent. Backend holds a
+      // 5-min Redis lock on this key; a second concurrent request with
+      // the same key returns 409 duplicate_request.
+      const idempotencyKey = crypto.randomUUID();
+      const { authorizationUrl } = await payInvoice(
+        invoice.id,
+        callbackUrl,
+        idempotencyKey
+      );
       window.location.href = authorizationUrl;
     } catch (err) {
       setPaying(false);
+      const apiErr = extractApiError(err);
+      if (apiErr?.code === "duplicate_request") {
+        toast.info(
+          "Payment already in progress",
+          "We received your earlier request. If Paystack doesn't open, refresh and try again.",
+          apiErr.requestId
+        );
+        return;
+      }
       toast.fromApiError("Couldn't start payment", err);
     }
   }

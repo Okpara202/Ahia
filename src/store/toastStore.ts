@@ -53,8 +53,10 @@ export const toast = {
     useToastStore
       .getState()
       .add({ variant: "error", title, description, requestId }),
-  info: (title: string, description?: string) =>
-    useToastStore.getState().add({ variant: "info", title, description }),
+  info: (title: string, description?: string, requestId?: string) =>
+    useToastStore
+      .getState()
+      .add({ variant: "info", title, description, requestId }),
   /** Center-screen prominent confirmation. Use for events the user needs
    *  to actually notice (role change, shop opened, payment confirmed). */
   confirm: (title: string, description?: string) =>

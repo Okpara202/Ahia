@@ -328,15 +328,21 @@ export async function purchaseDiscoverCampaign(args: {
    *  the dashboard-configured URL (the backend webhook), and the seller
    *  lands on a JSON 404 page. Same parameter `payInvoice` accepts. */
   callbackUrl?: string;
+  /** UUID generated at click time. Backend dedupes via 5-min Redis lock;
+   *  collision returns `409 duplicate_request`. See `buyBoost`. */
+  idempotencyKey?: string;
 }): Promise<PurchaseCampaignResponse> {
   const body: Record<string, string> = {
     postId: args.postId,
     plan: args.planId,
   };
   if (args.callbackUrl) body.callbackUrl = args.callbackUrl;
+  const headers: Record<string, string> = {};
+  if (args.idempotencyKey) headers["Idempotency-Key"] = args.idempotencyKey;
   const { data } = await apiClient().post<Record<string, unknown>>(
     "/discover/campaigns",
-    body
+    body,
+    Object.keys(headers).length > 0 ? { headers } : undefined
   );
   return normalizePaystackInit(data, "discover/campaigns");
 }

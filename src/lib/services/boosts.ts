@@ -85,6 +85,13 @@ interface BuyBoostArgs {
    *  the dashboard-configured URL (the backend webhook), and the seller
    *  lands on a JSON 404 page. Same parameter `payInvoice` accepts. */
   callbackUrl?: string;
+  /** UUID generated at click time to dedupe accidental double-submits
+   *  (network blip, React double-render, etc.). Backend keeps a 5-min
+   *  Redis lock keyed by this; a second request with the same key returns
+   *  `409 duplicate_request`. Caller should generate via
+   *  `crypto.randomUUID()` on each Pay click — same key on retry of a
+   *  single intent. */
+  idempotencyKey?: string;
 }
 
 /**
@@ -104,9 +111,12 @@ export async function buyBoost(args: BuyBoostArgs): Promise<PaystackInit> {
     plan: args.planId,
   };
   if (args.callbackUrl) body.callbackUrl = args.callbackUrl;
+  const headers: Record<string, string> = {};
+  if (args.idempotencyKey) headers["Idempotency-Key"] = args.idempotencyKey;
   const { data } = await apiClient().post<Record<string, unknown>>(
     "/boosts",
-    body
+    body,
+    Object.keys(headers).length > 0 ? { headers } : undefined
   );
   return normalizePaystackInit(data, "boosts");
 }

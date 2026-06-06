@@ -6,6 +6,7 @@ import { Loader2, Zap } from "lucide-react";
 import { BoostPlanList } from "@/app/(seller)/seller/products/_components/BoostPlanList";
 import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
+import { extractApiError } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import { BOOST_PLANS } from "@/lib/mocks/boosts";
 import { purchaseDiscoverCampaign } from "@/lib/services/discover";
@@ -64,14 +65,25 @@ export function BoostExistingPostButton({
     setSubmitting(true);
     try {
       const callbackUrl = `${window.location.origin}/payments/return`;
+      const idempotencyKey = crypto.randomUUID();
       const { authorizationUrl } = await purchaseDiscoverCampaign({
         postId,
         planId,
         callbackUrl,
+        idempotencyKey,
       });
       window.location.href = authorizationUrl;
     } catch (err) {
-      toast.fromApiError("Couldn't open Paystack", err);
+      const apiErr = extractApiError(err);
+      if (apiErr?.code === "duplicate_request") {
+        toast.info(
+          "Boost already in progress",
+          "We received your earlier request. If Paystack doesn't open, refresh and try again.",
+          apiErr.requestId
+        );
+      } else {
+        toast.fromApiError("Couldn't open Paystack", err);
+      }
       setSubmitting(false);
     }
   }

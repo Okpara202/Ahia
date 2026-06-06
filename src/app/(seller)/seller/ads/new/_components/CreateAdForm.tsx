@@ -179,10 +179,12 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
         return;
       }
       const callbackUrl = `${window.location.origin}/payments/return`;
+      const idempotencyKey = crypto.randomUUID();
       const { authorizationUrl } = await purchaseDiscoverCampaign({
         postId: post.id,
         planId,
         callbackUrl,
+        idempotencyKey,
       });
       // Hand off to Paystack — server resolves the campaign on its webhook
       // and the return URL drops the seller back at the analytics page.
@@ -225,6 +227,12 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
         toast.error(
           "Free post limit hit",
           "You can post 3 free Discover videos per month. Boost an existing post instead, or wait until your earliest free post expires.",
+          apiErr.requestId
+        );
+      } else if (apiErr?.code === "duplicate_request") {
+        toast.info(
+          "Ad already in progress",
+          "We received your earlier request. If Paystack doesn't open, refresh and try again.",
           apiErr.requestId
         );
       } else {

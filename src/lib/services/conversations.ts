@@ -482,17 +482,23 @@ export async function cancelInvoice(invoiceId: string): Promise<Invoice> {
 
 /** Buyer pays an invoice. Returns Paystack init payload — we redirect to
  *  `authorizationUrl`. Payment confirmation happens via Paystack webhook +
- *  `invoice:paid` socket event. */
+ *  `invoice:paid` socket event. `idempotencyKey` is a UUID generated at
+ *  click time to dedupe accidental double-submits; backend keeps a 5-min
+ *  Redis lock keyed on it and returns `409 duplicate_request` on collision. */
 export async function payInvoice(
   invoiceId: string,
-  callbackUrl?: string
+  callbackUrl?: string,
+  idempotencyKey?: string
 ): Promise<{ authorizationUrl: string; reference: string }> {
+  const headers: Record<string, string> = {};
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   const { data } = await apiClient().post<{
     authorizationUrl: string;
     reference: string;
   }>(
     `/invoices/${invoiceId}/pay`,
-    callbackUrl ? { callbackUrl } : {}
+    callbackUrl ? { callbackUrl } : {},
+    Object.keys(headers).length > 0 ? { headers } : undefined
   );
   return data;
 }
