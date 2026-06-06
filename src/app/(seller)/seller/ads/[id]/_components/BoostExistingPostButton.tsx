@@ -42,6 +42,22 @@ export function BoostExistingPostButton({
     };
   }, [open]);
 
+  // Reset the "Opening Paystack…" spinner if the seller hits back after a
+  // Paystack decline / cancel. handlePay navigates away via
+  // window.location.href, so it never gets to clear `submitting` itself —
+  // and on bfcache restore React preserves state without re-running
+  // effects. Without this, the button is stuck spinning until a full
+  // reload. `event.persisted === true` is the bfcache signal.
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted && submitting) {
+        setSubmitting(false);
+      }
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [submitting]);
+
   const chosen = BOOST_PLANS.find((p) => p.id === planId) ?? BOOST_PLANS[0];
 
   async function handlePay() {

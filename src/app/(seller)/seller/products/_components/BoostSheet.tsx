@@ -37,6 +37,22 @@ export function BoostSheet({ product, open, onClose }: BoostSheetProps) {
     };
   }, [open]);
 
+  // Reset the "Opening Paystack…" spinner on bfcache restore. handlePay
+  // navigates away via window.location.href, so it never clears
+  // `submitting` itself; on bfcache restore React preserves state without
+  // re-running effects, leaving the button stuck spinning. The mount-time
+  // reset above already handles the close-and-reopen case; this handles
+  // the back-from-Paystack case.
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted && submitting) {
+        setSubmitting(false);
+      }
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [submitting]);
+
   if (!open) return null;
 
   const chosen = BOOST_PLANS.find((p) => p.id === planId) ?? BOOST_PLANS[0];

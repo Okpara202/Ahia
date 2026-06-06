@@ -40,7 +40,7 @@ const FAQS: QA[] = [
   },
   {
     q: "What about delivery — who handles it?",
-    a: "Today, buyer and seller agree on dispatch inside chat. We're adding GIG / Kwik / Gokada / Sendbox quotes directly in the conversation so you can book without leaving Ahia.",
+    a: "Today, buyer and seller agree on dispatch inside chat. We're working on adding GIG / Kwik / Gokada / Sendbox quotes directly in the conversation so you can book without leaving Ahia.",
   },
   {
     q: "Is my chat private?",

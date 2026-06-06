@@ -1194,3 +1194,138 @@ PLATFORM_FEE_PERCENT=          # e.g. 5
 - **`role` is the visibility switch, not a permission gate.** A seller can browse as a buyer via the client-side `activeRole` without changing `user.role`. Flipping `user.role` to "buyer" hides the shop from feed/search but never deletes it. See §11c.
 - Use `toast.confirm()` (center) only for identity-level events. Everything else is corner placement. See §11c.
 - **Prefer `toast.fromApiError(title, err, fallback?)` in catch blocks** over hand-rolled `toast.error("X", extractApiError(err)?.message)`. It forwards the backend's `X-Request-Id` to the toast UI, which makes bug reports actionable. When you must branch on `apiErr.code` or `apiErr.fields`, pass `apiErr?.requestId` as the third arg to `toast.error`. See §11c.
+
+---
+
+## 22. Open Decisions for Team Discussion
+
+> These are not bugs and not coding work. They're product / ops / policy
+> calls to lock down before the next big feature push. Each one was
+> surfaced in a session conversation; logging here so they're not
+> re-derived from compacted context next time.
+
+### 22.1 Dispute SLA and admin staffing
+
+**Decision needed:** how long can a disputed transaction sit unresolved, and what happens if nobody acts?
+
+**Current behavior (verified in code):** when a dispute is raised, the line's `autoReleaseAt` flips to `null` — backend pauses the auto-release timer indefinitely. Money sits in escrow forever until an admin manually resolves.
+
+**Risk:** seller's working capital frozen with no SLA. Bad actors can grief by disputing every transaction; legitimate disputes pile up if admin bandwidth is low.
+
+**What healthy platforms do:** hard deadline with a default direction.
+- eBay: admin must respond within 30 days; default favors buyer (refund)
+- Etsy: 100 days; defaults to release if no buyer counter-evidence
+- Paystack chargebacks: merchant has 7 days; default favors customer
+
+**Questions for the team:**
+- Maximum hold time for a disputed transaction? (14 days? 30?)
+- Default direction if nobody acts? (Refund buyer = trust signal; release seller = working-capital signal)
+- Notification cadence? (Daily email to admin while open? Auto-escalate after N days?)
+
+### 22.2 Admin app design — multi-admin + super-admin model
+
+**Decision needed:** what does the admin app look like at v1, and how does it scale to multiple admins?
+
+**Constraints / context:**
+- Per §4 and §19: admins can only read chat history when a formal dispute is open on that specific transaction. Bake this into DB-level row access, not just app code.
+- Multiple admins coming as volume grows; founder is super-admin.
+
+**Smallest useful v1 admin app slice (recommended scope):**
+1. Admin sign-in (separate from buyer/seller auth, mandatory 2FA)
+2. Dispute queue (sorted by age, oldest first, with chat + transaction + evidence visible)
+3. Two-button resolve (refund / release) with a required note recorded in audit log
+4. User / shop management (view, suspend with reason)
+5. Audit log view (read-only, filterable by admin or action type)
+
+**Multi-admin design calls to make before writing code:**
+- **Roles vs scoped permissions?** Roles (super_admin, admin, support, finance) are simpler; scoped permissions are more flexible. Recommendation: start with roles, evolve later.
+- **Audit log from day one.** Every admin action writes `(admin_id, action, target, reason, timestamp)` to an `admin_actions` table. Non-negotiable for accountability + legal defensibility.
+- **Super-admin powers:** create/suspend other admins, read other admins' audit logs, configure dispute SLA / auto-release defaults. Super-admin should ALSO have a separate normal-admin account for daily work — don't exercise super-power by accident.
+- **2FA mandatory** for all admin accounts. Optional IP allowlist for sensitive actions.
+
+### 22.3 Seller verification tiers — KYC vendors + UX
+
+**Decision needed:** which tiers to ship, which KYC providers, what UX gating.
+
+**Tier ladder:**
+
+| Tier | Proof | Badge | Vendor | Cost / verification |
+|---|---|---|---|---|
+| 0 | Email only | None | n/a | ₦0 |
+| 1 — Phone | SMS OTP on NG number | Gray check | Termii (NG, ~₦4 / SMS) | ~₦4 |
+| 2 — BVN | BVN + DOB matched against CBN | Green check | Paystack BVN API (we already use Paystack) | ~₦20–50 |
+| 3 — ID | NIN slip / driver's license + selfie liveness | Green check + "ID verified" tag | Smile Identity (NG standard) | ~₦200–500 |
+
+**Operational notes:**
+- Don't store the actual ID image after the verdict resolves — just the provider's reference ID + result + timestamp. Keeps you out of PII storage liability.
+- Match logic on BVN names needs to be fuzzy (Nigerians often have ordering variations). Backend job.
+- Frontend: collect input, show pending state, show badge on success. Each tier is its own service-module call.
+
+**UX gating questions:**
+- All tiers optional / post-signup / incentivized? (Recommendation: yes — friction at signup kills seller acquisition)
+- Do trusted buyers get a filter "Only show ID-verified shops"? (Real trust differentiator)
+- Where to surface "Get verified" in the seller dashboard? (Recommendation: dedicated card showing the ladder + benefit text)
+
+**Smallest useful slice:** Tier 1 (phone via Termii) only. ~3 days of work front+back. Biggest trust uplift for lowest cost.
+
+### 22.4 Buyer verification — reactive, not proactive
+
+**Decision needed:** when (if ever) do we require buyer verification, and what proof?
+
+**Recommendation in principle: don't verify buyers upfront. Trigger verification only when needed.**
+
+**Why not upfront:**
+- Buyers are flighty; adding a BVN gate at signup kills 30–50% of casual top-of-funnel signups
+- Paystack already does payment KYC on every transaction (verified card/bank account) — you get that for free
+- Buyers spend money; sellers earn money. They have asymmetric tolerance for friction.
+
+**Triggers that justify verification:**
+1. **High-value purchase** (threshold TBD — ₦100k? ₦250k?) → BVN prompt at checkout. Frame as buyer protection, not gate.
+2. **Repeat disputer** → admin flag forces BVN before next purchase if "buyer raised N disputes in M months."
+3. **Dispute escalation** → if a buyer-initiated dispute might involve police/police-actionability, require BVN to continue dispute.
+4. **Cash-on-delivery** (if/when added) → mandatory BVN because Paystack isn't intermediating.
+
+**One soft requirement worth considering:** phone OTP for buyers at first checkout. ~₦4 cost, 10 seconds friction, eliminates drive-by spammers without killing conversion. Can be sold as "we'll text you order updates."
+
+**Questions for the team:**
+- Set the high-value-purchase threshold for buyer BVN prompt?
+- Build the dispute-frequency flag into backend now or defer?
+- Decide framing copy ("verify your identity" = scary; "protect your purchases" = friendly)
+
+### 22.5 Dispatch integrations — sequencing
+
+**Decision needed:** which dispatch partner to integrate first, and is it the right next bet at all?
+
+**FAQ already promises this:** "We're working on adding GIG / Kwik / Gokada / Sendbox quotes directly in the conversation so you can book without leaving Ahia." Don't let that promise sit unfulfilled too long.
+
+**Rough integration effort per provider:**
+
+| Service | API status | Effort | Notes |
+|---|---|---|---|
+| GIG Logistics | Public REST API for quotes + booking | ~1 week | Most established, recommended first |
+| Sendbox | Public API, intercity bias | ~1 week | Good second |
+| Kwik | API exists but requires partner agreement | ~2 weeks + business deal | |
+| Gokada | API exists, partnership terms vary | ~2 weeks | |
+
+**Recommendation:** ship Tier 1 with **one partner** (GIG). Get the in-chat flow working end-to-end (quote → pick → book → tracking events as system messages). Then add the others as the same flow with different backends — copy-paste once the abstraction is right.
+
+**Bigger question for the team:** is dispatch the next-most-important thing, or is admin + disputes higher priority? Dispatch is a polish feature for sellers who already work; admin is "we can scale" infrastructure. Lean admin first unless there's a specific seller-complaint signal saying otherwise.
+
+### 22.6 Quick-reply templates for sellers
+
+**Decision needed:** should sellers be able to save canned responses and insert them with one tap inside the chat?
+
+**Why it's a real ask:** Nigerian sellers on WhatsApp already maintain personal lists of canned text ("Yes ma it's available, ₦15k", "I'm in Yaba, can deliver Wednesday", "Send me your address please"). A seller juggling 30 chats a day re-types these constantly. Quick-reply templates would be a real time-save.
+
+**Scope considerations:**
+- Per-shop templates (saved by seller, used by that seller only). Not platform-wide.
+- 5–20 saved templates is the realistic ceiling.
+- Insertion as plain text into the input — not an "auto-send" — so the seller can still personalize before sending.
+- Optional: per-template usage counter so sellers see which templates they actually use.
+
+**Open questions:**
+- Where to manage them? (Dedicated page at `/seller/templates`? Inline drawer inside the chat input?)
+- Search / category? (Probably not needed at <20 templates; let them eyeball the list.)
+- AI-suggest templates from chat patterns? (Tier 3 ML work; not v1.)
+
+**Effort:** small — maybe a week including a dedicated management page. Worth doing once admin + disputes are tight.

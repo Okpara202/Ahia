@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -58,6 +58,23 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
   const [uploadPercent, setUploadPercent] = useState<number | undefined>(
     undefined
   );
+
+  // Reset the submitting / upload-overlay state on bfcache restore. In
+  // paid mode handleSubmit hands off to Paystack via window.location.href
+  // and never clears `submitting` itself; on back-from-Paystack the
+  // browser may restore this page from bfcache with submitting still
+  // true, leaving the UploadOverlay covering the form. `event.persisted`
+  // is the bfcache signal.
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted && submitting) {
+        setSubmitting(false);
+        setUploadPercent(undefined);
+      }
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [submitting]);
 
   const chosen = BOOST_PLANS.find((p) => p.id === planId) ?? BOOST_PLANS[0];
   const valid =

@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { usePresenceStore } from "@/store/presenceStore";
+import { toast } from "@/store/toastStore";
 import type {
   Invoice,
   InvoiceStatus,
@@ -72,6 +73,22 @@ interface InvoiceLineExtendedPayload {
   autoReleaseAt: string;
   extendedAt: string;
   extensionReason: string;
+}
+
+/** Payloads for dispute lifecycle events. Backend may include more
+ *  context; we only read what's needed to surface a real-time toast. */
+interface DisputeOpenedPayload {
+  disputeId?: string;
+  transactionId?: string;
+  conversationId?: string;
+}
+
+interface DisputeResolvedPayload {
+  disputeId?: string;
+  /** Backend's verdict: `refunded` → money back to buyer; `released` →
+   *  money to seller. */
+  resolution?: "refunded" | "released";
+  conversationId?: string;
 }
 
 /**
@@ -281,6 +298,30 @@ export function useSocket() {
       });
     }
 
+    /* ----- dispute events ----- */
+
+    function onDisputeOpened(_p: DisputeOpenedPayload) {
+      // Backend already creates a notification row + emits notification:new,
+      // which bumps the bell badge. This toast is the extra "right now"
+      // signal for sellers who have the dashboard open — disputes are a
+      // stress event and we don't want them to learn about it on the next
+      // page refresh.
+      toast.error(
+        "Dispute opened",
+        "A buyer raised a dispute on a recent transaction. Review the chat history and respond."
+      );
+    }
+
+    function onDisputeResolved(p: DisputeResolvedPayload) {
+      const outcome =
+        p.resolution === "refunded"
+          ? "Refunded to the buyer."
+          : p.resolution === "released"
+            ? "Released to the seller."
+            : "The dispute has been resolved.";
+      toast.info("Dispute resolved", outcome);
+    }
+
     function onInvoiceCreated(p: MessagePayload) {
       // Backend emits this AND message:new. message:new handler already adds
       // the message; if this fires first/only, ensure the invoice message
@@ -318,6 +359,8 @@ export function useSocket() {
       s.on("invoice:line_released", onLineReleasedByAdmin);
       s.on("invoice:line_refunded", onLineRefunded);
       s.on("presence:changed", onPresenceChanged);
+      s.on("dispute:opened", onDisputeOpened);
+      s.on("dispute:resolved", onDisputeResolved);
 
       // Heartbeat so backend's TTL doesn't expire while the tab is open.
       heartbeatId = window.setInterval(() => {
@@ -345,6 +388,8 @@ export function useSocket() {
       socket.off("invoice:line_released", onLineReleasedByAdmin);
       socket.off("invoice:line_refunded", onLineRefunded);
       socket.off("presence:changed", onPresenceChanged);
+      socket.off("dispute:opened", onDisputeOpened);
+      socket.off("dispute:resolved", onDisputeResolved);
     };
   }, [isAuthed]);
 }
