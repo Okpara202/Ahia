@@ -498,6 +498,12 @@ export type NotificationType =
   | "invoice_line_disputed"
   | "invoice_line_extended"
   | "dispute_resolved"
+  /** 14-day SLA auto-refund fires this distinct type with `data.auto: true`.
+   *  Copy emphasises "we refunded automatically because the seller didn't
+   *  respond" — different from a manual admin verdict (`dispute_resolved`).
+   *  Links to the same conversation (`/inbox/:conversationId`) so the user
+   *  can scroll back to the system messages. */
+  | "dispute_auto_resolved"
   | "boost_purchased"
   | "discover_campaign_started"
   | "referral_completed"

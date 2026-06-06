@@ -38,6 +38,10 @@ const FALLBACK_LABELS: Record<
     title: "Dispute resolved",
     body: "An admin has decided on the dispute.",
   },
+  dispute_auto_resolved: {
+    title: "Dispute auto-resolved",
+    body: "We refunded automatically because the seller didn't respond in 14 days.",
+  },
   boost_purchased: {
     title: "Boost active",
     body: "Your product is now boosted in the feed.",
