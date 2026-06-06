@@ -46,9 +46,11 @@ export function BoostSheet({ product, open, onClose }: BoostSheetProps) {
   async function handlePay() {
     setSubmitting(true);
     try {
+      const callbackUrl = `${window.location.origin}/payments/return`;
       const { authorizationUrl } = await buyBoost({
         productId: product.id,
         planId,
+        callbackUrl,
       });
       window.location.href = authorizationUrl;
     } catch (err) {

@@ -161,9 +161,11 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
         router.push(`/seller/ads/${post.id}`);
         return;
       }
+      const callbackUrl = `${window.location.origin}/payments/return`;
       const { authorizationUrl } = await purchaseDiscoverCampaign({
         postId: post.id,
         planId,
+        callbackUrl,
       });
       // Hand off to Paystack — server resolves the campaign on its webhook
       // and the return URL drops the seller back at the analytics page.

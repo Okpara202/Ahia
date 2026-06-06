@@ -47,9 +47,11 @@ export function BoostExistingPostButton({
   async function handlePay() {
     setSubmitting(true);
     try {
+      const callbackUrl = `${window.location.origin}/payments/return`;
       const { authorizationUrl } = await purchaseDiscoverCampaign({
         postId,
         planId,
+        callbackUrl,
       });
       window.location.href = authorizationUrl;
     } catch (err) {

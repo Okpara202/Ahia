@@ -80,6 +80,11 @@ export async function getMyBoosts(): Promise<Boost[]> {
 interface BuyBoostArgs {
   productId: string;
   planId: BoostPlanId;
+  /** Where Paystack returns the browser after payment — pass
+   *  `${origin}/payments/return`. Without this, Paystack falls back to
+   *  the dashboard-configured URL (the backend webhook), and the seller
+   *  lands on a JSON 404 page. Same parameter `payInvoice` accepts. */
+  callbackUrl?: string;
 }
 
 /**
@@ -94,10 +99,15 @@ interface BuyBoostArgs {
  * `deleteProduct` and `setProductVisibility`.
  */
 export async function buyBoost(args: BuyBoostArgs): Promise<PaystackInit> {
-  const { data } = await apiClient().post<Record<string, unknown>>("/boosts", {
+  const body: Record<string, string> = {
     productId: args.productId,
     plan: args.planId,
-  });
+  };
+  if (args.callbackUrl) body.callbackUrl = args.callbackUrl;
+  const { data } = await apiClient().post<Record<string, unknown>>(
+    "/boosts",
+    body
+  );
   return normalizePaystackInit(data, "boosts");
 }
 
