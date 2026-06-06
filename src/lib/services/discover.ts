@@ -118,46 +118,6 @@ export async function getDiscoverFeed({
   };
 }
 
-/** Current seller's Discover campaigns. Phase 7 live endpoint. Backend
- *  infers the shop from the session cookie; the `shopId` param the
- *  existing callers pass is ignored here but kept for backwards-compat. */
-export async function getMyDiscoverCampaigns(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _shopId: string
-): Promise<Array<DiscoverAdCampaign & { post: DiscoverPost }>> {
-  const api = await getApi();
-  try {
-    const { data } = await api.get<{
-      items?: Array<DiscoverAdCampaign & { post: DiscoverPost }>;
-      campaigns?: Array<DiscoverAdCampaign & { post: DiscoverPost }>;
-    }>("/discover/campaigns/me");
-    return data.items ?? data.campaigns ?? [];
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) return [];
-    throw err;
-  }
-}
-
-/** Per-campaign analytics for the `/seller/ads/[id]` page. */
-export async function getDiscoverAdAnalytics(campaignId: string): Promise<{
-  campaign: DiscoverAdCampaign;
-  post: DiscoverPost;
-  daily: DailyAdStat[];
-} | null> {
-  const api = await getApi();
-  try {
-    const { data } = await api.get<{
-      campaign: DiscoverAdCampaign;
-      post: DiscoverPost;
-      daily: DailyAdStat[];
-    }>(`/discover/campaigns/${campaignId}/analytics`);
-    return data;
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
-    throw err;
-  }
-}
-
 /**
  * Fetch a single Discover post by id (owner-only). Backend shipped the
  * direct lookup on 2026-06-06 — see BACKEND deploy doc same date. Returns
@@ -307,9 +267,7 @@ interface MyDiscoverPostsPage {
 
 /**
  * The current seller's own Discover posts — free, boosted, and expired
- * all included. Drives the `/seller/ads` list. Distinct from
- * `getMyDiscoverCampaigns`, which only returns posts with a paid campaign
- * attached.
+ * all included. Drives the `/seller/ads` list.
  */
 export async function getMyDiscoverPosts(
   args: { cursor?: string | null; limit?: number } = {}

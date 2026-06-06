@@ -157,12 +157,18 @@ export interface DiscoverPost {
  * A paid campaign that pushes a DiscoverPost into guaranteed slots.
  * Reuses BoostPlanId for pricing parity with the feed-boost flow.
  */
+/**
+ * Shape matches backend's `GET /discover/posts/:id/analytics` (deploy
+ * 2026-06-06). `postId` / `shopId` are optional because that endpoint
+ * omits them — only the legacy `/discover/campaigns/me` path included
+ * them, and we no longer call it.
+ */
 export interface DiscoverAdCampaign {
   id: string;
-  postId: string;
-  shopId: string;
+  postId?: string;
+  shopId?: string;
   plan: BoostPlanId;
-  amountPaid: number;
+  spend: number;
   startsAt: string;
   endsAt: string;
   active: boolean;

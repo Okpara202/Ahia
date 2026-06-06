@@ -5,7 +5,7 @@ import { ShieldCheck, X, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Typography } from "@/components/Typography";
-import { buyBoost } from "@/lib/actions/boosts";
+import { buyBoost } from "@/lib/services/boosts";
 import { BOOST_PLANS } from "@/lib/mocks/boosts";
 import { formatNaira } from "@/lib/format";
 import { toast } from "@/store/toastStore";

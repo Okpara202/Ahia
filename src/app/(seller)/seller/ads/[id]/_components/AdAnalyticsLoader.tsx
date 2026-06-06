@@ -201,7 +201,7 @@ function Loaded({ post, campaign, daily }: LoadedData) {
             <Kpi label="CTR" value={`${ctr}%`} icon={TrendingUp} />
             <Kpi
               label="Spent"
-              value={campaign ? formatNaira(campaign.amountPaid) : "—"}
+              value={campaign ? formatNaira(campaign.spend) : "—"}
               icon={Wallet}
             />
           </div>

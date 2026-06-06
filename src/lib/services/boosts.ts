@@ -1,8 +1,8 @@
 import axios from "axios";
 
-import { getApi } from "@/lib/api";
+import { apiClient, getApi } from "@/lib/api";
 import { BOOST_PLANS, getBoostPlan } from "@/lib/mocks/boosts";
-import type { Boost, BoostPlan } from "@/types";
+import type { Boost, BoostPlan, BoostPlanId } from "@/types";
 
 // Plans still live in `@/lib/mocks/boosts` as a fallback. Once we want
 // pricing changes without a frontend deploy, the BOOST_PLANS export here
@@ -70,6 +70,35 @@ export async function getMyBoosts(): Promise<Boost[]> {
     if (axios.isAxiosError(err) && err.response?.status === 404) return [];
     throw err;
   }
+}
+
+interface BuyBoostArgs {
+  productId: string;
+  planId: BoostPlanId;
+}
+
+interface PaystackInit {
+  authorizationUrl: string;
+  reference: string;
+}
+
+/**
+ * Initiate purchase of a product boost. Backend creates a Paystack
+ * transaction with metadata (productId, plan) and returns the
+ * authorization URL; the caller redirects the browser to it. Backend
+ * writes the `boosts` row on the Paystack webhook.
+ *
+ * Lives in services/ as a client-side call — server actions silently
+ * fail against the cross-origin backend because Next.js can't forward
+ * the session cookie (see CLAUDE.md §11c). Same migration we did for
+ * `deleteProduct` and `setProductVisibility`.
+ */
+export async function buyBoost(args: BuyBoostArgs): Promise<PaystackInit> {
+  const { data } = await apiClient().post<PaystackInit>("/boosts", {
+    productId: args.productId,
+    plan: args.planId,
+  });
+  return data;
 }
 
 export { getBoostPlan };
