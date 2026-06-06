@@ -270,7 +270,18 @@ export interface MessageReaction {
 export interface BaseMessage {
   id: string;
   conversationId: string;
-  senderId: string;
+  /** Author of the message — null for `system` and `admin` posts. Use
+   *  `senderType` to distinguish. Historical messages always have a
+   *  senderId (backend mapper guarantees this for `senderType: "user"`). */
+  senderId: string | null;
+  /** Author class. Backend sets this on every message returned. `user` is
+   *  the buyer/seller path, `system` is a backend-injected notice (e.g.
+   *  "Ahia Support joined this conversation"), `admin` is an admin posting
+   *  during dispute resolution as "Ahia Support". */
+  senderType: "user" | "system" | "admin";
+  /** Display name for `admin` posts ("Ahia Support") — backend includes
+   *  this only when senderType is `admin`. */
+  senderName?: string;
   createdAt: string;
   /** Non-null when the message has been edited (text-only, 15-min window). */
   editedAt: string | null;
@@ -408,7 +419,8 @@ export interface ConversationListItem {
     /** Pre-rendered preview text — already includes emoji prefix for
      *  non-text types ("🎤 Voice (0:42)", "📷 Photo", "🧾 Invoice ₦25,500"). */
     snippet: string;
-    senderId: string;
+    /** Null for system or admin messages. */
+    senderId: string | null;
     createdAt: string;
   } | null;
   lastActivityAt: string;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { X } from "lucide-react";
+import { ShieldCheck, X } from "lucide-react";
 
 import { Typography } from "@/components/Typography";
 import { cn } from "@/lib/utils";
@@ -16,22 +16,35 @@ interface ImageMessageCardProps {
 export function ImageMessageCard({ message, mine }: ImageMessageCardProps) {
   const [lightbox, setLightbox] = useState(false);
   const caption = message.content;
+  const isAdmin = message.senderType === "admin";
 
   return (
     <>
       <div
         className={cn(
           "flex flex-col gap-1",
-          mine ? "items-end" : "items-start"
+          mine && !isAdmin ? "items-end" : "items-start"
         )}
       >
+        {isAdmin && (
+          <div className="flex items-center gap-1 px-1 text-accent">
+            <ShieldCheck className="size-3.5" />
+            <Typography variant="caption" className="font-medium">
+              {message.senderName ?? "Ahia Support"}
+            </Typography>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setLightbox(true)}
           aria-label="Open image"
           className={cn(
             "relative h-56 w-44 overflow-hidden rounded-2xl bg-muted sm:h-64 sm:w-52",
-            mine ? "rounded-br-md" : "rounded-bl-md"
+            isAdmin
+              ? "rounded-bl-md ring-2 ring-accent/40"
+              : mine
+                ? "rounded-br-md"
+                : "rounded-bl-md"
           )}
         >
           <Image

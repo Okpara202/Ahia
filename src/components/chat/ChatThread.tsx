@@ -29,6 +29,10 @@ function emptyMessageBase(conversationId: string, senderId: string) {
   return {
     conversationId,
     senderId,
+    // Optimistic sends are always the local user — the server's reply
+    // replaces this with the real message envelope (including the same
+    // senderType + actual senderId).
+    senderType: "user" as const,
     createdAt: new Date().toISOString(),
     editedAt: null,
     deliveredAt: null,

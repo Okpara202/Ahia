@@ -1,3 +1,5 @@
+import { ShieldCheck } from "lucide-react";
+
 import { Typography } from "@/components/Typography";
 import { cn } from "@/lib/utils";
 import type { TextMessage } from "@/types";
@@ -17,25 +19,42 @@ export function MessageBubble({
     hour: "numeric",
     minute: "2-digit",
   });
+  const isAdmin = message.senderType === "admin";
 
   return (
     <div
       className={cn(
         "flex flex-col gap-1",
-        mine ? "items-end" : "items-start"
+        mine && !isAdmin ? "items-end" : "items-start"
       )}
     >
+      {isAdmin && (
+        <div className="flex items-center gap-1 px-1 text-accent">
+          <ShieldCheck className="size-3.5" />
+          <Typography variant="caption" className="font-medium">
+            {message.senderName ?? "Ahia Support"}
+          </Typography>
+        </div>
+      )}
       <div
         className={cn(
           "max-w-[85%] rounded-2xl px-3 py-2 sm:max-w-[70%]",
-          mine
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-card text-foreground"
+          isAdmin
+            ? "rounded-bl-md border border-accent/40 bg-accent/10 text-foreground"
+            : mine
+              ? "rounded-br-md bg-primary text-primary-foreground"
+              : "rounded-bl-md bg-card text-foreground"
         )}
       >
         <Typography
           variant="body-sm"
-          className={mine ? "text-primary-foreground" : "text-foreground"}
+          className={
+            isAdmin
+              ? "text-foreground"
+              : mine
+                ? "text-primary-foreground"
+                : "text-foreground"
+          }
         >
           {message.content}
         </Typography>

@@ -160,10 +160,31 @@ export function mapInvoice(raw: unknown): Invoice {
 export function mapMessage(raw: unknown): Message {
   const r = asObject(raw);
   const type = asString(r.type, "text") as MessageType;
+  // Backend always sends senderType per ADMIN_API_REFERENCE.md §8.1.
+  // Default to "user" defensively (historical rows always satisfy this).
+  const rawSenderType = r.senderType;
+  const senderType: "user" | "system" | "admin" =
+    rawSenderType === "system" || rawSenderType === "admin"
+      ? rawSenderType
+      : "user";
+  // senderId is null on system/admin posts. Treat empty string as null too —
+  // older mappers asString'd it; keep behavior consistent for any callers
+  // that defensively check truthiness.
+  const rawSenderId = r.senderId;
+  const senderId =
+    typeof rawSenderId === "string" && rawSenderId.length > 0
+      ? rawSenderId
+      : null;
+  const senderName =
+    typeof r.senderName === "string" && r.senderName.length > 0
+      ? r.senderName
+      : undefined;
   const base = {
     id: asString(r.id),
     conversationId: asString(r.conversationId),
-    senderId: asString(r.senderId),
+    senderId,
+    senderType,
+    senderName,
     createdAt: asString(r.createdAt, new Date(0).toISOString()),
     editedAt: asNullableString(r.editedAt),
     deliveredAt: asNullableString(r.deliveredAt),
