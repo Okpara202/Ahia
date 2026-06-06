@@ -9,7 +9,7 @@ interface BuyBoostArgs {
 }
 
 interface PaystackInit {
-  authorization_url: string;
+  authorizationUrl: string;
   reference: string;
 }
 

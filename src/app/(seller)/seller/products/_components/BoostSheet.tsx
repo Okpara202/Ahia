@@ -46,11 +46,11 @@ export function BoostSheet({ product, open, onClose }: BoostSheetProps) {
   async function handlePay() {
     setSubmitting(true);
     try {
-      const { authorization_url } = await buyBoost({
+      const { authorizationUrl } = await buyBoost({
         productId: product.id,
         planId,
       });
-      window.location.href = authorization_url;
+      window.location.href = authorizationUrl;
     } catch (err) {
       toast.fromApiError("Couldn't open Paystack", err);
       setSubmitting(false);

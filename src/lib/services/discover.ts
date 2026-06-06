@@ -346,7 +346,7 @@ export async function deleteDiscoverPost(postId: string): Promise<void> {
 }
 
 interface PurchaseCampaignResponse {
-  authorization_url: string;
+  authorizationUrl: string;
   reference: string;
 }
 
@@ -354,6 +354,9 @@ interface PurchaseCampaignResponse {
  * Start a paid Discover campaign for an uploaded post. Returns the Paystack
  * authorization URL — the caller redirects the browser to it. Backend writes
  * the `discover_campaigns` row on the Paystack success webhook.
+ *
+ * Field name matches the rest of the backend's Paystack init payloads
+ * (`payInvoice` etc.) — camelCase `authorizationUrl`, not snake_case.
  */
 export async function purchaseDiscoverCampaign(args: {
   postId: string;

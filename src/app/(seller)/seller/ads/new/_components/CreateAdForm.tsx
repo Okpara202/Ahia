@@ -161,13 +161,13 @@ export function CreateAdForm({ products, shop }: CreateAdFormProps) {
         router.push(`/seller/ads/${post.id}`);
         return;
       }
-      const { authorization_url } = await purchaseDiscoverCampaign({
+      const { authorizationUrl } = await purchaseDiscoverCampaign({
         postId: post.id,
         planId,
       });
       // Hand off to Paystack — server resolves the campaign on its webhook
       // and the return URL drops the seller back at the analytics page.
-      window.location.href = authorization_url;
+      window.location.href = authorizationUrl;
     } catch (err) {
       const apiErr = extractApiError(err);
       // Dump everything we can about the failure so a 400 from backend

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Heart, LogOut, Receipt, UserRound } from "lucide-react";
+import { Bookmark, Heart, LogOut, Receipt, UserRound } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -32,8 +32,9 @@ import { toast } from "@/store/toastStore";
  * sign-out one click away.
  *
  * Items in here are deliberately distinct from the top-nav icon row
- * (Inbox / Notifications / Saved already have their own icons). Anything
- * with its own icon stays out of the dropdown to avoid duplication.
+ * (Inbox / Notifications). Saved IS included here because its top-nav
+ * icon is `hidden md:grid` — without this entry mobile buyers would have
+ * no way to reach `/saved`.
  */
 export function ProfileMenu() {
   const router = useRouter();
@@ -93,6 +94,13 @@ export function ProfileMenu() {
           <Link href="/profile">
             <UserRound className="size-4 text-muted-foreground" />
             <span className="flex-1">Profile</span>
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild>
+          <Link href="/saved">
+            <Bookmark className="size-4 text-muted-foreground" />
+            <span className="flex-1">Saved</span>
           </Link>
         </DropdownMenuItem>
 

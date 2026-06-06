@@ -47,11 +47,11 @@ export function BoostExistingPostButton({
   async function handlePay() {
     setSubmitting(true);
     try {
-      const { authorization_url } = await purchaseDiscoverCampaign({
+      const { authorizationUrl } = await purchaseDiscoverCampaign({
         postId,
         planId,
       });
-      window.location.href = authorization_url;
+      window.location.href = authorizationUrl;
     } catch (err) {
       toast.fromApiError("Couldn't open Paystack", err);
       setSubmitting(false);
