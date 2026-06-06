@@ -138,6 +138,38 @@ export async function getDiscoverPostById(
 }
 
 /**
+ * Campaign-keyed analytics — still shipped by backend per the 2026-06-06
+ * doc. We use it as a fallback when `/seller/ads/[id]` is reached with a
+ * campaign id (e.g. after Paystack returns and `data.next` from
+ * `/payments/verify` happens to be `/seller/ads/<campaignId>` instead of
+ * `/seller/ads/<postId>`). Returns the post embedded in the response, so
+ * the loader can resolve the canonical post id and render.
+ */
+export async function getDiscoverPostByCampaignId(
+  campaignId: string
+): Promise<{
+  post: DiscoverPost;
+  campaign: DiscoverAdCampaign;
+  daily: DailyAdStat[];
+} | null> {
+  try {
+    const { data } = await apiClient().get<{
+      post: unknown;
+      campaign: DiscoverAdCampaign;
+      daily: DailyAdStat[];
+    }>(`/discover/campaigns/${campaignId}/analytics`);
+    return {
+      post: mapDiscoverPost(data.post),
+      campaign: data.campaign,
+      daily: data.daily ?? [],
+    };
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
  * Daily analytics for a Discover post. Backend ships a post-keyed
  * endpoint (deploy 2026-06-06) that returns the post counters plus the
  * most-relevant campaign (active first, else most recently ended) plus
