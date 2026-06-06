@@ -119,31 +119,27 @@ export interface PaystackInit {
 }
 
 /**
- * Read a Paystack init response from the backend tolerating BOTH camelCase
- * (`authorizationUrl`) AND snake_case (`authorization_url`). Backend has
- * been inconsistent on different routes — `payInvoice` returns camel,
- * `/discover/campaigns` and `/boosts` have at points returned snake.
+ * Read a Paystack init response from the backend. Backend confirmed all
+ * Paystack endpoints (`payInvoice`, `buyBoost`, `purchaseDiscoverCampaign`)
+ * return `authorizationUrl` (camelCase) since 2026-06-06.
  *
- * Throws an Error if neither shape is present so the caller's catch block
- * fires instead of redirecting the browser to `/undefined`. The error
- * message includes a JSON-ish summary of the response keys plus the
- * source route (e.g. "discover/campaigns") so it's actionable in console.
+ * Throws an Error if `authorizationUrl` is missing so the caller's catch
+ * block fires instead of redirecting the browser to `/undefined`. The
+ * source route (e.g. "discover/campaigns") is included for console
+ * triage if backend ever regresses.
  */
 export function normalizePaystackInit(
   raw: Record<string, unknown>,
   source: string
 ): PaystackInit {
   const url =
-    (typeof raw.authorizationUrl === "string" && raw.authorizationUrl) ||
-    (typeof raw.authorization_url === "string" && raw.authorization_url) ||
-    "";
+    typeof raw.authorizationUrl === "string" ? raw.authorizationUrl : "";
   const reference =
-    (typeof raw.reference === "string" && raw.reference) || "";
+    typeof raw.reference === "string" ? raw.reference : "";
   if (!url) {
-    const keys = Object.keys(raw).join(", ") || "(empty body)";
     console.warn(`[${source}] missing Paystack URL in response`, { raw });
     throw new Error(
-      `Backend did not return a Paystack authorization URL (keys: ${keys}). Please retry; if this persists share the request ID with support.`
+      `Backend did not return a Paystack authorization URL. Please retry; if this persists share the request ID with support.`
     );
   }
   return { authorizationUrl: url, reference };

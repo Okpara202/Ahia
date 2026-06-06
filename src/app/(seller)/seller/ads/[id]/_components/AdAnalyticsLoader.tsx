@@ -20,7 +20,6 @@ import { extractApiError } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import {
   getDiscoverPostAnalytics,
-  getDiscoverPostByCampaignId,
   getDiscoverPostById,
 } from "@/lib/services/discover";
 import type {
@@ -59,38 +58,23 @@ export function AdAnalyticsLoader({ id }: AdAnalyticsLoaderProps) {
 
     (async () => {
       try {
-        // Try the id as a post id first (the canonical case).
         const post = await getDiscoverPostById(id);
         if (cancelled) return;
-        if (post) {
-          const sponsored =
-            post.status === "boosted" ||
-            (post.status === undefined && post.sponsored === true);
-          const analytics = sponsored
-            ? await getDiscoverPostAnalytics(post.id)
-            : null;
-          if (cancelled) return;
-          setData({
-            post,
-            campaign: analytics?.campaign ?? null,
-            daily: analytics?.daily ?? [],
-          });
-          return;
-        }
-        // Fall back to treating the id as a campaign id. Backend's
-        // /payments/verify currently returns `next: /seller/ads/<campaignId>`
-        // after a fresh boost, so this branch is the success path for the
-        // post-Paystack landing case.
-        const byCampaign = await getDiscoverPostByCampaignId(id);
-        if (cancelled) return;
-        if (!byCampaign) {
+        if (!post) {
           setError("not_found");
           return;
         }
+        const sponsored =
+          post.status === "boosted" ||
+          (post.status === undefined && post.sponsored === true);
+        const analytics = sponsored
+          ? await getDiscoverPostAnalytics(post.id)
+          : null;
+        if (cancelled) return;
         setData({
-          post: byCampaign.post,
-          campaign: byCampaign.campaign,
-          daily: byCampaign.daily,
+          post,
+          campaign: analytics?.campaign ?? null,
+          daily: analytics?.daily ?? [],
         });
       } catch (err) {
         if (cancelled) return;

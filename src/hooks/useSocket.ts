@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import type { Socket } from "socket.io-client";
 
 import { mapMessage } from "@/lib/services/conversations";
 import { disconnectSocket, getSocket } from "@/lib/socket";
@@ -89,7 +90,13 @@ export function useSocket() {
       return;
     }
 
-    const socket = getSocket();
+    // socket.io-client is dynamically imported by getSocket() so it doesn't
+    // ship in the initial bundle for unauthed surfaces. Resolution is async;
+    // track cancellation so a sign-out before the import resolves doesn't
+    // attach orphan listeners.
+    let cancelled = false;
+    let socket: Socket | null = null;
+    let heartbeatId: number | null = null;
 
     /* ---------------- helpers ---------------- */
 
@@ -185,11 +192,6 @@ export function useSocket() {
         .getState()
         .setPresence(p.userId, p.online, p.lastSeenAt ?? null);
     }
-
-    /** Heartbeat so backend's TTL doesn't expire while the tab is open. */
-    const heartbeatId = window.setInterval(() => {
-      socket.emit("heartbeat");
-    }, 20_000);
 
     /* ----- invoice events ----- */
 
@@ -295,27 +297,38 @@ export function useSocket() {
       }
     }
 
-    /* ---------------- wire up ---------------- */
+    /* ---------------- wire up (after async import resolves) ---------------- */
 
-    socket.on("message:new", onMessage);
-    socket.on("message:edited", onMessageEdited);
-    socket.on("message:reaction_changed", onReactionChanged);
-    socket.on("message:delivered", onDelivered);
-    socket.on("message:read", onRead);
-    socket.on("image:new", onMessage);
-    socket.on("notification:new", onNotification);
-    socket.on("invoice:created", onInvoiceCreated);
-    socket.on("invoice:cancelled", onInvoiceCancelled);
-    socket.on("invoice:paid", onInvoicePaid);
-    socket.on("invoice:line_confirmed", onLineConfirmed);
-    socket.on("invoice:line_disputed", onLineDisputed);
-    socket.on("invoice:line_extended", onLineExtended);
-    socket.on("invoice:line_released", onLineReleasedByAdmin);
-    socket.on("invoice:line_refunded", onLineRefunded);
-    socket.on("presence:changed", onPresenceChanged);
+    getSocket().then((s) => {
+      if (cancelled) return;
+      socket = s;
+      s.on("message:new", onMessage);
+      s.on("message:edited", onMessageEdited);
+      s.on("message:reaction_changed", onReactionChanged);
+      s.on("message:delivered", onDelivered);
+      s.on("message:read", onRead);
+      s.on("image:new", onMessage);
+      s.on("notification:new", onNotification);
+      s.on("invoice:created", onInvoiceCreated);
+      s.on("invoice:cancelled", onInvoiceCancelled);
+      s.on("invoice:paid", onInvoicePaid);
+      s.on("invoice:line_confirmed", onLineConfirmed);
+      s.on("invoice:line_disputed", onLineDisputed);
+      s.on("invoice:line_extended", onLineExtended);
+      s.on("invoice:line_released", onLineReleasedByAdmin);
+      s.on("invoice:line_refunded", onLineRefunded);
+      s.on("presence:changed", onPresenceChanged);
+
+      // Heartbeat so backend's TTL doesn't expire while the tab is open.
+      heartbeatId = window.setInterval(() => {
+        s.emit("heartbeat");
+      }, 20_000);
+    });
 
     return () => {
-      window.clearInterval(heartbeatId);
+      cancelled = true;
+      if (heartbeatId !== null) window.clearInterval(heartbeatId);
+      if (!socket) return;
       socket.off("message:new", onMessage);
       socket.off("message:edited", onMessageEdited);
       socket.off("message:reaction_changed", onReactionChanged);
