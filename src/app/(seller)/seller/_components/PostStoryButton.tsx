@@ -125,6 +125,10 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
         caption: caption.trim() || undefined,
         onProgress: setUploadPercent,
       });
+      // Drop the overlay on success; the success body inside the sheet
+      // is what the user reads next. Forgetting to clear `submitting`
+      // left the "Finishing up…" sweep covering the success card.
+      setSubmitting(false);
       setUploadPercent(undefined);
       setPosted(true);
       toast.success("Story posted", "It expires in 24 hours.");
@@ -143,7 +147,7 @@ function StoryComposerSheet({ onClose }: { onClose: () => void }) {
       <UploadOverlay
         open={submitting}
         progress={uploadPercent}
-        title={isVideo ? "Uploading your video…" : "Posting your story…"}
+        title={isVideo ? "Uploading your story…" : "Posting your story…"}
         hint="Keep this tab open — we'll let you know when it's done."
       />
       <button

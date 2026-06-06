@@ -1,6 +1,11 @@
 import axios from "axios";
 
-import { apiClient, getApi } from "@/lib/api";
+import {
+  apiClient,
+  getApi,
+  normalizePaystackInit,
+  type PaystackInit,
+} from "@/lib/api";
 import { BOOST_PLANS, getBoostPlan } from "@/lib/mocks/boosts";
 import type { Boost, BoostPlan, BoostPlanId } from "@/types";
 
@@ -77,11 +82,6 @@ interface BuyBoostArgs {
   planId: BoostPlanId;
 }
 
-interface PaystackInit {
-  authorizationUrl: string;
-  reference: string;
-}
-
 /**
  * Initiate purchase of a product boost. Backend creates a Paystack
  * transaction with metadata (productId, plan) and returns the
@@ -94,11 +94,11 @@ interface PaystackInit {
  * `deleteProduct` and `setProductVisibility`.
  */
 export async function buyBoost(args: BuyBoostArgs): Promise<PaystackInit> {
-  const { data } = await apiClient().post<PaystackInit>("/boosts", {
+  const { data } = await apiClient().post<Record<string, unknown>>("/boosts", {
     productId: args.productId,
     plan: args.planId,
   });
-  return data;
+  return normalizePaystackInit(data, "boosts");
 }
 
 export { getBoostPlan };

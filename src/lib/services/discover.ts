@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { apiClient, getApi } from "@/lib/api";
+import { apiClient, getApi, normalizePaystackInit } from "@/lib/api";
 import type {
   BoostPlanId,
   DailyAdStat,
@@ -313,16 +313,20 @@ interface PurchaseCampaignResponse {
  * authorization URL — the caller redirects the browser to it. Backend writes
  * the `discover_campaigns` row on the Paystack success webhook.
  *
- * Field name matches the rest of the backend's Paystack init payloads
- * (`payInvoice` etc.) — camelCase `authorizationUrl`, not snake_case.
+ * Backend has been inconsistent about field casing on Paystack init
+ * responses — `payInvoice` returns `authorizationUrl` (camel) while
+ * `/discover/campaigns` and `/boosts` have at points returned
+ * `authorization_url` (snake). We accept either + log when neither is
+ * present so a user can paste the response to backend without us having
+ * to redeploy on every flip.
  */
 export async function purchaseDiscoverCampaign(args: {
   postId: string;
   planId: BoostPlanId;
 }): Promise<PurchaseCampaignResponse> {
-  const { data } = await apiClient().post<PurchaseCampaignResponse>(
+  const { data } = await apiClient().post<Record<string, unknown>>(
     "/discover/campaigns",
     { postId: args.postId, plan: args.planId }
   );
-  return data;
+  return normalizePaystackInit(data, "discover/campaigns");
 }

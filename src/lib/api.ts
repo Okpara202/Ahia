@@ -110,4 +110,43 @@ export function apiClient(): AxiosInstance {
   return getBrowserApi();
 }
 
+/** Standard Paystack init payload shape returned by every "start a payment"
+ *  endpoint (boost, discover campaign, invoice pay). camelCase per the
+ *  project convention. */
+export interface PaystackInit {
+  authorizationUrl: string;
+  reference: string;
+}
+
+/**
+ * Read a Paystack init response from the backend tolerating BOTH camelCase
+ * (`authorizationUrl`) AND snake_case (`authorization_url`). Backend has
+ * been inconsistent on different routes — `payInvoice` returns camel,
+ * `/discover/campaigns` and `/boosts` have at points returned snake.
+ *
+ * Throws an Error if neither shape is present so the caller's catch block
+ * fires instead of redirecting the browser to `/undefined`. The error
+ * message includes a JSON-ish summary of the response keys plus the
+ * source route (e.g. "discover/campaigns") so it's actionable in console.
+ */
+export function normalizePaystackInit(
+  raw: Record<string, unknown>,
+  source: string
+): PaystackInit {
+  const url =
+    (typeof raw.authorizationUrl === "string" && raw.authorizationUrl) ||
+    (typeof raw.authorization_url === "string" && raw.authorization_url) ||
+    "";
+  const reference =
+    (typeof raw.reference === "string" && raw.reference) || "";
+  if (!url) {
+    const keys = Object.keys(raw).join(", ") || "(empty body)";
+    console.warn(`[${source}] missing Paystack URL in response`, { raw });
+    throw new Error(
+      `Backend did not return a Paystack authorization URL (keys: ${keys}). Please retry; if this persists share the request ID with support.`
+    );
+  }
+  return { authorizationUrl: url, reference };
+}
+
 export { BASE_URL as API_BASE_URL };
