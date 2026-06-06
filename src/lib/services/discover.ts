@@ -159,39 +159,33 @@ export async function getDiscoverAdAnalytics(campaignId: string): Promise<{
 }
 
 /**
- * Fetch a single Discover post by id. Backend's v2 deploy doc doesn't
- * list a `GET /discover/posts/:id` endpoint, so we list-and-paginate
- * the seller's own posts until we find it. Typical sellers have <12
- * posts so this terminates on page 1. Switch to a direct GET when
- * backend ships one (queued in memory next_backend_handoff).
- *
- * We don't pass `limit` — backend's default is fine, and earlier we
- * tripped a `VALIDATION_FAILED` when overriding it with a value above
- * backend's cap. Pagination is robust against any cap.
+ * Fetch a single Discover post by id (owner-only). Backend shipped the
+ * direct lookup on 2026-06-06 — see BACKEND deploy doc same date. Returns
+ * `null` on 404 so the loader can render a clean "not found" state.
  */
 export async function getDiscoverPostById(
   postId: string
 ): Promise<DiscoverPost | null> {
-  let cursor: string | null = null;
-  // Safety cap: 10 pages × backend default page size is comfortably above
-  // any realistic seller's post count, and stops a runaway loop if the
-  // backend ever returns a nextCursor that never resolves to empty.
-  for (let i = 0; i < 10; i++) {
-    const page = await getMyDiscoverPosts({ cursor });
-    const found = page.items.find((p) => p.id === postId);
-    if (found) return found;
-    if (!page.nextCursor) return null;
-    cursor = page.nextCursor;
+  try {
+    const { data } = await apiClient().get<{ post: unknown }>(
+      `/discover/posts/${postId}`
+    );
+    return mapDiscoverPost(data.post);
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
+    throw err;
   }
-  return null;
 }
 
 /**
- * Daily analytics for a sponsored post. Backend's analytics endpoint is
- * still campaign-keyed (`/discover/campaigns/:id/analytics`), so we
- * look up the campaign id via `/discover/campaigns/me`, then fetch the
- * analytics. Free / expired posts have no campaign and return null
- * straight away.
+ * Daily analytics for a Discover post. Backend ships a post-keyed
+ * endpoint (deploy 2026-06-06) that returns the post counters plus the
+ * most-relevant campaign (active first, else most recently ended) plus
+ * its daily breakdown. For never-boosted posts `campaign` is `null` and
+ * `daily` is `[]` — caller handles both shapes.
+ *
+ * Returns `null` on 404 only (post deleted / no access). Other errors
+ * propagate so the loader can surface them.
  */
 export async function getDiscoverPostAnalytics(
   postId: string
@@ -199,13 +193,17 @@ export async function getDiscoverPostAnalytics(
   campaign: DiscoverAdCampaign | null;
   daily: DailyAdStat[];
 } | null> {
-  // `_shopId` is ignored by backend — kept for backwards-compat signature.
-  const campaigns = await getMyDiscoverCampaigns("");
-  const campaignWithPost = campaigns.find((c) => c.postId === postId);
-  if (!campaignWithPost) return null;
-  const data = await getDiscoverAdAnalytics(campaignWithPost.id);
-  if (!data) return null;
-  return { campaign: data.campaign, daily: data.daily };
+  try {
+    const { data } = await apiClient().get<{
+      post: unknown;
+      campaign: DiscoverAdCampaign | null;
+      daily: DailyAdStat[];
+    }>(`/discover/posts/${postId}/analytics`);
+    return { campaign: data.campaign, daily: data.daily ?? [] };
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
+    throw err;
+  }
 }
 
 /** Fire-and-forget impression beacon — called as a DiscoverItem comes
