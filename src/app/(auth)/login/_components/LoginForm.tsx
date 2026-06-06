@@ -38,6 +38,18 @@ export function LoginForm() {
       const apiErr = extractApiError(err);
       if (apiErr?.fields) {
         setFieldErrors(apiErr.fields);
+      } else if (apiErr?.code === "account_suspended") {
+        // Login endpoint also rejects suspended users with 403
+        // account_suspended (per backend 2026-06-07 §B1). Surface the
+        // reason as a destructive toast in-form rather than redirecting
+        // — the user hasn't been authed, so the auth interceptor's
+        // suspended-page redirect doesn't fire.
+        toast.error(
+          "Account suspended",
+          apiErr.message ??
+            "Your account has been suspended. Email support@ahia.ng if you think this is a mistake.",
+          apiErr.requestId
+        );
       } else {
         toast.error(
           "Couldn't sign in",

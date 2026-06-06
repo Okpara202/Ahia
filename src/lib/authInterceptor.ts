@@ -3,6 +3,10 @@ import axios, { type AxiosError, type AxiosInstance } from "axios";
 import { consumeJustAuthed } from "@/lib/authSignal";
 import { useAuthStore } from "@/store/authStore";
 
+interface ApiErrorBody {
+  error?: { code?: string; message?: string; requestId?: string };
+}
+
 /**
  * Global 401 handler installed on the browser Axios instance.
  *
@@ -32,9 +36,11 @@ import { useAuthStore } from "@/store/authStore";
 
 const PUBLIC_AUTH_PATHS = ["/login", "/signup", "/forgot-password"] as const;
 const REDIRECT_BLOCKED = "/help/sign-in-blocked";
+const REDIRECT_SUSPENDED = "/account-suspended";
 
 function shouldSuppressOnPath(pathname: string): boolean {
   if (pathname === REDIRECT_BLOCKED) return true;
+  if (pathname === REDIRECT_SUSPENDED) return true;
   return PUBLIC_AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}?`));
 }
 
@@ -53,8 +59,37 @@ export function installAuthInterceptor(instance: AxiosInstance): void {
     (response) => response,
     (error: unknown) => {
       if (!axios.isAxiosError(error)) return Promise.reject(error);
-      const axiosErr = error as AxiosError;
-      if (axiosErr.response?.status !== 401) return Promise.reject(error);
+      const axiosErr = error as AxiosError<ApiErrorBody>;
+      const status = axiosErr.response?.status;
+      const code = axiosErr.response?.data?.error?.code;
+
+      // 403 account_suspended: backend confirms the user row has
+      // status="suspended". Cookie is still valid cryptographically — backend
+      // doesn't clear it — so we sign out locally to drop the persisted
+      // `isAuthed` flag, then redirect to the suspended-account page with
+      // the reason + requestId in the query string. Same suppression rule:
+      // don't redirect when we're already on the suspended page or a
+      // public auth page (those handle the message inline).
+      if (status === 403 && code === "account_suspended") {
+        if (typeof window !== "undefined" && shouldSuppressOnPath(window.location.pathname)) {
+          return Promise.reject(error);
+        }
+        useAuthStore.getState().signOut();
+        if (typeof window !== "undefined") {
+          const body = axiosErr.response?.data?.error;
+          const reason = body?.message ?? "";
+          const requestId = body?.requestId ?? "";
+          const qs = new URLSearchParams();
+          if (reason) qs.set("reason", reason);
+          if (requestId) qs.set("ref", requestId);
+          const search = qs.toString();
+          window.location.href = `${REDIRECT_SUSPENDED}${search ? `?${search}` : ""}`;
+        }
+        // Swallow so callers don't flash a misleading toast on the way out.
+        return new Promise<never>(() => undefined);
+      }
+
+      if (status !== 401) return Promise.reject(error);
 
       // Don't redirect when we're already on a page that handles auth itself —
       // login/signup forms show their own field-level errors, and the help
